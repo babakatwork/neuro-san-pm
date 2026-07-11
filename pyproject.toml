@@ -1,0 +1,39 @@
+[project]
+name = "neuro-san-team-colleague"
+version = "0.1.0"
+description = "A persistent, event-driven product-management colleague built on Neuro SAN."
+requires-python = ">=3.10"
+dependencies = [
+    "neuro-san-studio==0.3.9",
+    "python-dotenv==1.2.2",
+    "requests==2.34.2",
+    "slack-bolt==1.29.0",
+    "google-api-python-client==2.198.0",
+    "google-auth-httplib2==0.3.0",
+    "google-auth-oauthlib==1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "croniter==6.2.4",
+    "packaging==26.2",
+    "pyhocon==0.3.63",
+    "pytest==8.4.2",
+    "ruff==0.15.21",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 119
+src = ["apps", "coded_tools", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+known-first-party = ["apps", "coded_tools", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

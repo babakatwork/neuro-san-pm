@@ -1,0 +1,27 @@
+{
+    "product_colleague.hocon": {
+        "serve": true,
+        "public": false,
+        "mcp": false,
+        "periodic": {
+            "interactions": [
+                {
+                    # The runtime key is `enable` (not the `enabled` spelling
+                    # shown in the prose of the original periodic-events PR).
+                    "enable": true,
+                    "cron_schedule": "*/15 * * * *",
+                    "cron_schedule": ${?COLLEAGUE_CRON_SCHEDULE},
+                    "second_at_beginning": false,
+                    "text": """
+Scheduled product-management heartbeat. Inspect the configured GitHub Project,
+process any new allowlisted Slack requests, and report only material changes,
+blockers, or a due daily digest. Do not emit a routine message every run.
+""",
+                    "metadata": {
+                        "user_id": "system"
+                    }
+                }
+            ]
+        }
+    }
+}

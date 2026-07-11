@@ -1,0 +1,60 @@
+from pathlib import Path
+
+from pyhocon import ConfigFactory
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_event_network_and_native_periodic_manifest(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network_path = ROOT / "registries" / "product_colleague.hocon"
+    network = ConfigFactory.parse_string(network_path.read_text(encoding="utf-8"), basedir=ROOT)
+    manifest = ConfigFactory.parse_file(ROOT / "registries" / "manifest.hocon")
+
+    frontman = network["tools"][0]
+    manifest_entries = {str(key).strip('"'): value for key, value in manifest.items()}
+    interaction = manifest_entries["product_colleague.hocon"]["periodic"]["interactions"][0]
+    assert frontman["function"]["invocation"] == "event"
+    assert interaction["enable"] is True
+    assert "cron_schedule" in interaction
+    assert "sly_data" not in interaction
+
+
+def test_mcp_is_read_only_and_uses_current_header_key(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    config = ConfigFactory.parse_file(ROOT / "mcp" / "mcp_info.hocon")
+
+    github_entries = {str(key).strip('"'): value for key, value in config.items() if "githubcopilot.com" in key}
+    assert github_entries
+    assert all("/readonly" in url for url in github_entries)
+    assert all("http_headers" in value for value in github_entries.values())
+    assert all("headers" not in value for value in github_entries.values())
+    assert set(github_entries["https://api.githubcopilot.com/mcp/x/projects/readonly"]["tools"]) == {
+        "projects_get",
+        "projects_list",
+    }
+
+
+def test_sample_uses_host_scoped_github_reader(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network_path = ROOT / "registries" / "product_colleague.hocon"
+    network = ConfigFactory.parse_string(network_path.read_text(encoding="utf-8"), basedir=ROOT)
+
+    tools = {tool["name"]: tool for tool in network["tools"]}
+    analyst = tools["KanbanAnalyst"]
+    reader = tools["GitHubProjectReader"]
+    assert analyst["tools"] == ["GitHubProjectReader", "KanbanSnapshot"]
+    assert reader["name"] == "GitHubProjectReader"
+    assert reader["function"]["parameters"]["properties"] == {}
+    assert "owner and project number come only from environment" in analyst["instructions"]
+
+
+def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network = ConfigFactory.parse_string(
+        (ROOT / "registries" / "product_colleague.hocon").read_text(encoding="utf-8"), basedir=ROOT
+    )
+    tools = {tool["name"]: tool for tool in network["tools"]}
+    assert tools["GmailAssistant"]["tools"] == ["GmailSearch", "GmailRead", "GmailSend"]
+    assert "trusted Slack request" in tools["GmailAssistant"]["instructions"]
+    assert tools["GmailSend"]["class"].endswith("gmail_send.GmailSend")

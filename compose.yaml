@@ -1,0 +1,81 @@
+services:
+  neuro-san:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Agent runtime secrets: deliberately exclude the Socket Mode app token.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_PROJECT_OWNER: ${GITHUB_PROJECT_OWNER:-cognizant-ai-lab}
+      GITHUB_PROJECT_OWNER_TYPE: ${GITHUB_PROJECT_OWNER_TYPE:-org}
+      GITHUB_PROJECT_NUMBER: ${GITHUB_PROJECT_NUMBER:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_BOT_USER_ID: ${SLACK_BOT_USER_ID:-}
+      SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
+      SLACK_ALLOWED_USER_IDS: ${SLACK_ALLOWED_USER_IDS:-}
+      COLLEAGUE_GMAIL_ENABLED: ${COLLEAGUE_GMAIL_ENABLED:-false}
+      GMAIL_TOKEN_PATH: /run/colleague-secrets/gmail-token.json
+      GMAIL_QUERY_PREFIX: ${GMAIL_QUERY_PREFIX:-in:inbox newer_than:30d}
+      COLLEAGUE_GMAIL_WRITE_ENABLED: ${COLLEAGUE_GMAIL_WRITE_ENABLED:-false}
+      GMAIL_ALLOWED_RECIPIENTS: ${GMAIL_ALLOWED_RECIPIENTS:-}
+
+      COLLEAGUE_SLACK_WRITE_ENABLED: ${COLLEAGUE_SLACK_WRITE_ENABLED:-false}
+      COLLEAGUE_SLACK_REQUIRE_MENTION: ${COLLEAGUE_SLACK_REQUIRE_MENTION:-true}
+      COLLEAGUE_SLACK_MESSAGE_PREFIX: ${COLLEAGUE_SLACK_MESSAGE_PREFIX:-[neuro-san colleague]}
+      COLLEAGUE_SLACK_DEDUPE_SECONDS: ${COLLEAGUE_SLACK_DEDUPE_SECONDS:-21600}
+      COLLEAGUE_SLACK_MAX_PAGES: ${COLLEAGUE_SLACK_MAX_PAGES:-10}
+      COLLEAGUE_SLACK_MAX_REQUESTS: ${COLLEAGUE_SLACK_MAX_REQUESTS:-50}
+      COLLEAGUE_SLACK_MAX_THREAD_PAGES: ${COLLEAGUE_SLACK_MAX_THREAD_PAGES:-10}
+      COLLEAGUE_SLACK_INITIAL_LOOKBACK_HOURS: ${COLLEAGUE_SLACK_INITIAL_LOOKBACK_HOURS:-24}
+      COLLEAGUE_SLACK_EVENT_MAX_ATTEMPTS: ${COLLEAGUE_SLACK_EVENT_MAX_ATTEMPTS:-3}
+      COLLEAGUE_CRON_SCHEDULE: ${COLLEAGUE_CRON_SCHEDULE:-*/15 * * * *}
+      COLLEAGUE_MAX_RUN_SECONDS: ${COLLEAGUE_MAX_RUN_SECONDS:-600}
+      COLLEAGUE_REPORT_INTERVAL_HOURS: ${COLLEAGUE_REPORT_INTERVAL_HOURS:-24}
+      COLLEAGUE_STALE_AFTER_DAYS: ${COLLEAGUE_STALE_AFTER_DAYS:-14}
+      COLLEAGUE_MAX_PROJECT_ITEMS: ${COLLEAGUE_MAX_PROJECT_ITEMS:-500}
+
+      AGENT_HTTP_SERVER_INSTANCES: "1"
+      AGENT_REQUEST_LOGGING_INPUT_SLICE: "0"
+      COLLEAGUE_STATE_PATH: /data/colleague.json
+      COLLEAGUE_AUDIT_PATH: /data/audit.jsonl
+      NEURO_SAN_BASE_URL: http://localhost:8080
+      NEURO_SAN_SERVER_HTTP_PORT: "8080"
+    expose:
+      - "8080"
+    volumes:
+      - colleague-state:/data
+      - ./.secrets:/run/colleague-secrets:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/list', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
+  slack-bridge:
+    build: .
+    restart: unless-stopped
+    profiles: ["slack"]
+    environment:
+      # Transport-only credentials: no GitHub or LLM key enters this process.
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_BOT_USER_ID: ${SLACK_BOT_USER_ID:-}
+      SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
+      SLACK_ALLOWED_USER_IDS: ${SLACK_ALLOWED_USER_IDS:-}
+      COLLEAGUE_SLACK_REQUIRE_MENTION: ${COLLEAGUE_SLACK_REQUIRE_MENTION:-true}
+      COLLEAGUE_STATE_PATH: /data/colleague.json
+      NEURO_SAN_BASE_URL: http://neuro-san:8080
+    command: ["python", "-m", "apps.slack_bridge"]
+    volumes:
+      - colleague-state:/data
+    depends_on:
+      neuro-san:
+        condition: service_healthy
+
+volumes:
+  colleague-state:

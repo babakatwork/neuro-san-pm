@@ -1,0 +1,34 @@
+{
+    # Optional raw read-only building blocks for future networks. The sample
+    # colleague does NOT attach these tools: it uses GitHubProjectReader so the
+    # host, rather than the model, fixes the owner/project resource boundary.
+    "https://api.githubcopilot.com/mcp/x/projects/readonly": {
+        "http_headers": {
+            "Authorization": "Bearer "${GITHUB_TOKEN}
+        },
+        "tools": ["projects_list", "projects_get"]
+    },
+    "https://api.githubcopilot.com/mcp/x/issues/readonly": {
+        "http_headers": {
+            "Authorization": "Bearer "${GITHUB_TOKEN}
+        },
+        "tools": ["list_issues", "issue_read"]
+    },
+    "https://api.githubcopilot.com/mcp/x/pull_requests/readonly": {
+        "http_headers": {
+            "Authorization": "Bearer "${GITHUB_TOKEN}
+        },
+        "tools": ["list_pull_requests", "pull_request_read"]
+    },
+
+    # Optional local-only computer use. The sample colleague does not reference
+    # this server. Start it explicitly and enable registries/optional/
+    # computer_use_researcher.hocon only after reviewing docs/computer-use.md.
+    "http://localhost:8931/mcp": {
+        "tools": [
+            "browser_navigate",
+            "browser_snapshot",
+            "browser_take_screenshot"
+        ]
+    }
+}

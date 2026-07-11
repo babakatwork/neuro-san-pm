@@ -1,0 +1,6 @@
+-r requirements.txt
+croniter==6.2.4
+packaging==26.2
+pyhocon==0.3.63
+pytest==8.4.2
+ruff==0.15.21
