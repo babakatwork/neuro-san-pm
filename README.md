@@ -142,7 +142,10 @@ it through the same paginated Slack inbox used by scheduled runs. The caller
 receives an immediate event acknowledgement while the agent continues and
 replies through the fixed-channel SlackPost tool.
 
-See [Slack setup and behavior](docs/slack.md) for the complete checklist.
+See [Slack setup and behavior](docs/slack.md) for the complete checklist. Before
+enabling live posting, read [first run and product-manager
+tuning](docs/first-run-and-tuning.md) for expected scenarios and an initial
+calibration checklist.
 
 ## Run permanently
 
