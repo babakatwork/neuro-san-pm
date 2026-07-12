@@ -10,4 +10,5 @@ htmlcov/
 logs/
 .state/
 .secrets/
-.DS_Store
+.DS_Store/
+setEnv.sh
