@@ -1,5 +1,4 @@
 import sys
-from pathlib import Path
 
 import pytest
 from scripts.start_server import server_command
@@ -10,9 +9,15 @@ def test_server_command_uses_current_environment(monkeypatch):
 
     command = server_command()
 
-    assert command[0].endswith("/ns")
-    assert command[1:] == ["run", "--server-only", "--server-http-port", "8080"]
-    assert command[0] == str(Path(sys.executable).with_name("ns"))
+    assert command == [
+        sys.executable,
+        "-m",
+        "neuro_san_studio",
+        "run",
+        "--server-only",
+        "--server-http-port",
+        "8080",
+    ]
 
 
 @pytest.mark.parametrize("value", ["zero", "0", "8188"])

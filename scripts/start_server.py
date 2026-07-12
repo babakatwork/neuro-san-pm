@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
 from scripts.check_config import main as check_config
 
@@ -18,8 +17,10 @@ def server_command() -> list[str]:
         raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be an integer") from exc
     if port != 8080:
         raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be 8080 for this deployment contract")
-    executable = Path(sys.executable).with_name("ns")
-    return [str(executable), "run", "--server-only", "--server-http-port", str(port)]
+    # Use Studio's supported module entry point instead of the ``ns`` console
+    # script. Console-script shebangs embed an absolute virtualenv path and can
+    # become stale when a project directory is moved.
+    return [sys.executable, "-m", "neuro_san_studio", "run", "--server-only", "--server-http-port", str(port)]
 
 
 def main() -> int:
