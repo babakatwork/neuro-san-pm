@@ -4,8 +4,28 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from scripts.check_config import main as check_config
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def configure_core_environment() -> None:
+    """Point Neuro SAN core at this standalone project's runtime assets."""
+    paths = {
+        "AGENT_MANIFEST_FILE": ROOT / "registries" / "manifest.hocon",
+        "AGENT_TOOL_PATH": ROOT / "coded_tools",
+        "MCP_SERVERS_INFO_FILE": ROOT / "mcp" / "mcp_info.hocon",
+    }
+    for name, path in paths.items():
+        os.environ[name] = str(path)
+
+    current_pythonpath = os.getenv("PYTHONPATH", "")
+    entries = [entry for entry in current_pythonpath.split(os.pathsep) if entry]
+    root = str(ROOT)
+    os.environ["PYTHONPATH"] = os.pathsep.join([root, *(entry for entry in entries if entry != root)])
+    os.environ.setdefault("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "5")
 
 
 def server_command() -> list[str]:
@@ -17,16 +37,24 @@ def server_command() -> list[str]:
         raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be an integer") from exc
     if port != 8080:
         raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be 8080 for this deployment contract")
-    # Use Studio's supported module entry point instead of the ``ns`` console
-    # script. Console-script shebangs embed an absolute virtualenv path and can
-    # become stale when a project directory is moved.
-    return [sys.executable, "-m", "neuro_san_studio", "run", "--server-only", "--server-http-port", str(port)]
+    return [
+        sys.executable,
+        "-m",
+        "neuro_san.service.main_loop.server_main_loop",
+        "--http_port",
+        str(port),
+        "--http_server_instances",
+        "1",
+        "--manifest_update_period_seconds",
+        os.getenv("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "5"),
+    ]
 
 
 def main() -> int:
     """Fail closed on configuration errors, otherwise exec the server."""
     if check_config() != 0:
         return 1
+    configure_core_environment()
     try:
         command = server_command()
     except ValueError as exc:

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A persistent, event-driven product-management colleague built on Neuro SAN."
 requires-python = ">=3.10"
 dependencies = [
-    "neuro-san-studio==0.3.9",
+    "neuro-san==0.6.76",
     "python-dotenv==1.2.2",
     "requests==2.34.2",
     "slack-bolt==1.29.0",

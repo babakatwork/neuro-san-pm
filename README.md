@@ -1,6 +1,6 @@
 # Neuro SAN Team Colleague
 
-A standalone Neuro SAN Studio project for an event-driven product-management
+A standalone Neuro SAN project for an event-driven product-management
 colleague. It uses neuro-san's native periodic-event runtime to inspect a GitHub
 Project, notices material Kanban changes, checks trusted Slack messages, and
 posts a concise update when a teammate should know. Optional Gmail tools can
@@ -13,7 +13,7 @@ and audit records never contain tokens or message bodies.
 
 ## What is included
 
-- `neuro-san-studio==0.3.9`, which pins `neuro-san==0.6.76`.
+- `neuro-san==0.6.76` core as the only Neuro SAN runtime dependency.
 - A `ProductColleague` front agent with `function.invocation = "event"`.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
 - A host-scoped, query-only GitHub Project reader whose owner/project cannot be
@@ -213,7 +213,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 67 unit/contract tests;
+- 68 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;
@@ -230,7 +230,7 @@ are intentionally absent from the project.
 ```text
 apps/slack_bridge.py                 Slack event -> Neuro SAN event bridge
 coded_tools/colleague/               state, Slack, config, and snapshot tools
-config/                              shared model and plugin configuration
+config/                              shared model configuration
 mcp/mcp_info.hocon                   future read-only MCP building blocks
 registries/product_colleague.hocon   sample agent network
 registries/manifest.hocon            native periodic schedule

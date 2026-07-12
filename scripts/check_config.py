@@ -127,12 +127,9 @@ def main() -> int:
         errors.append(f"invalid COLLEAGUE_CRON_SCHEDULE: {exc}")
 
     try:
-        studio_version = Version(version("neuro-san-studio"))
         core_version = Version(version("neuro-san"))
-        if studio_version != Version("0.3.9"):
-            errors.append(f"neuro-san-studio must be 0.3.9, found {studio_version}")
-        if core_version < Version("0.6.51"):
-            errors.append(f"neuro-san must be at least 0.6.51, found {core_version}")
+        if core_version != Version("0.6.76"):
+            errors.append(f"neuro-san must be 0.6.76, found {core_version}")
     except PackageNotFoundError as exc:
         errors.append(f"dependency not installed: {exc.name}")
 

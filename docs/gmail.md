@@ -1,8 +1,8 @@
 # Gmail capability
 
 Gmail is optional and disabled by default. Dedicated coded tools keep reading
-and sending as distinct security boundaries instead of exposing Studio's broad
-combined Gmail toolkit to the autonomous agent.
+and sending as distinct security boundaries instead of exposing a broad combined
+Gmail toolkit to the autonomous agent.
 
 ## Authorize read access
 

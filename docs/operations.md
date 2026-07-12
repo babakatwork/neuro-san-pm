@@ -97,7 +97,7 @@ state volume. Add `-v` only when intentionally resetting state.
 
 ## Upgrade runbook
 
-1. Read Studio/core release notes, especially scheduler, event, and MCP changes.
+1. Read Neuro SAN core release notes, especially scheduler, event, and MCP changes.
 2. Update the exact pin in `requirements.txt` and `pyproject.toml` together.
 3. Rebuild a fresh `.venv`.
 4. Run `make validate`.

@@ -1,6 +1,5 @@
-# Studio 0.3.9 pins neuro-san 0.6.76, which contains native event continuation
-# and periodic manifest scheduling.
-neuro-san-studio==0.3.9
+# Core 0.6.76 contains native event continuation and periodic scheduling.
+neuro-san==0.6.76
 python-dotenv==1.2.2
 requests==2.34.2
 slack-bolt==1.29.0

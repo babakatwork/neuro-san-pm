@@ -2,16 +2,16 @@
 
 ## Gmail
 
-Studio's existing `gmail_toolkit` exposes search, reading, drafts, and sending
-together. The sample does not attach that broad toolkit to an autonomous loop.
+The pre-existing combined Gmail toolkit exposes search, reading, drafts, and
+sending together. The sample does not attach that broad toolkit to an autonomous loop.
 It uses the official Google API client behind three coded boundaries instead:
 bounded host-prefixed search, bounded plain-text read, and a separately scoped,
 lease-bound, exact-recipient-allowlisted sender that starts in dry-run mode.
 
 ## Neuro SAN runtime
 
-This project follows the current `ns init` project shape and uses Studio 0.3.9 /
-core 0.6.76. Scheduling is not a custom Python loop: `periodic.interactions` in
+This project uses Neuro SAN core 0.6.76 directly. Scheduling is not a custom Python loop:
+`periodic.interactions` in
 the manifest activates the core scheduler, and the front agent is an `event`.
 
 ## Existing GitHub MCP entry
@@ -37,7 +37,7 @@ no fabricated fallback.
 
 ## Existing Slack app
 
-The Studio Socket Mode app is a useful interactive reference, but it accepts
+The pre-existing Socket Mode app is a useful interactive reference, but it accepts
 arbitrary network names and `sly_data`, keeps context only in memory, and does
 not provide an agent-callable proactive send boundary. The new bridge is fixed
 to `product_colleague`, one channel, and allowlisted users. It sends only a wake
