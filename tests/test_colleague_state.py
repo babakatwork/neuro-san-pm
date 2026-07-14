@@ -13,6 +13,9 @@ def test_state_lease_checkpoint_and_finish(monkeypatch, tmp_path):
     first = json.loads(tool.invoke({"action": "begin"}, {}))
     assert first["acquired"] is True
     assert first["report_due"] is True
+    assert first["first_contact"] is True
+    assert first["slack_update_recommended"] is True
+    assert first["daily_email_pending"] is False
     run_id = first["run_id"]
 
     overlapping = json.loads(tool.invoke({"action": "begin"}, {}))

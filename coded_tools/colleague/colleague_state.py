@@ -31,6 +31,8 @@ DEFAULT_STATE: dict[str, Any] = {
     "last_slack_ts": "0",
     "last_report_at": None,
     "last_notified_digest": None,
+    "daily_email_pending": False,
+    "last_email_summary_at": None,
     "run": None,
 }
 
@@ -102,6 +104,9 @@ class ColleagueState(CodedTool):
             acquired=True,
             run_id=run_id,
             report_due=self._report_due(state),
+            first_contact=not bool(state.get("last_report_at")),
+            slack_update_recommended=self._report_due(state),
+            daily_email_pending=bool(state.get("daily_email_pending")),
             state=state,
         )
 
@@ -130,6 +135,8 @@ class ColleagueState(CodedTool):
             "last_slack_ts": str,
             "last_report_at": str,
             "last_notified_digest": str,
+            "daily_email_pending": bool,
+            "last_email_summary_at": str,
         }
         with exclusive_file_lock(self._path()):
             state = self._load()
@@ -160,13 +167,13 @@ class ColleagueState(CodedTool):
                         return json_result(ok=False, error="last_slack_ts cannot move backwards")
                 if key == "last_notified_digest" and not SHA256_RE.fullmatch(value):
                     return json_result(ok=False, error="last_notified_digest must be a SHA-256 hex digest")
-                if key == "last_report_at":
+                if key in {"last_report_at", "last_email_summary_at"}:
                     try:
                         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
                     except ValueError:
-                        return json_result(ok=False, error="last_report_at must be an ISO-8601 timestamp")
+                        return json_result(ok=False, error=f"{key} must be an ISO-8601 timestamp")
                     if parsed.tzinfo is None:
-                        return json_result(ok=False, error="last_report_at must include a timezone")
+                        return json_result(ok=False, error=f"{key} must include a timezone")
                 state[key] = value
                 updated.append(key)
             atomic_write_json(self._path(), state)
@@ -207,7 +214,7 @@ class ColleagueState(CodedTool):
             last_report = datetime.fromisoformat(str(last_report_at).replace("Z", "+00:00"))
             if last_report.tzinfo is None:
                 last_report = last_report.replace(tzinfo=timezone.utc)
-            interval_hours = max(1, int(os.getenv("COLLEAGUE_REPORT_INTERVAL_HOURS", "24")))
+            interval_hours = max(1, int(os.getenv("COLLEAGUE_REPORT_INTERVAL_HOURS", "36")))
         except ValueError:
             return True
         elapsed = datetime.now(timezone.utc) - last_report.astimezone(timezone.utc)

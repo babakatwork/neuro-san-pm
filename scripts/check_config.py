@@ -91,7 +91,7 @@ def main() -> int:
 
     cron = os.getenv("COLLEAGUE_CRON_SCHEDULE", "*/15 * * * *")
     max_run, max_run_error = read_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
-    _, report_error = read_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 24)
+    _, report_error = read_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
     _, stale_error = read_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
     _, max_items_error = read_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 500, 1000)
     _, slack_pages_error = read_bounded_int("COLLEAGUE_SLACK_MAX_PAGES", 10, 100)
@@ -143,6 +143,14 @@ def main() -> int:
 
     if not write_enabled:
         warnings.append("Slack posting is in dry-run mode (recommended for the first run)")
+    daily_summary_to = os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", "").strip().lower()
+    gmail_allowed = {
+        value.strip().lower()
+        for value in os.getenv("GMAIL_ALLOWED_RECIPIENTS", "").split(",")
+        if value.strip()
+    }
+    if daily_summary_to and daily_summary_to not in gmail_allowed:
+        warnings.append("COLLEAGUE_DAILY_SUMMARY_TO is not in GMAIL_ALLOWED_RECIPIENTS; summaries will not send")
 
     for warning in warnings:
         print(f"WARNING: {warning}")

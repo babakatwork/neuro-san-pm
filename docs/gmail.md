@@ -30,9 +30,12 @@ Regenerate the token with the narrow send scope:
 Set `GMAIL_ALLOWED_RECIPIENTS` to exact addresses. First inspect dry-run
 previews, then deliberately set `COLLEAGUE_GMAIL_WRITE_ENABLED=true`. Sending
 also requires the active colleague lease. Messages are plain text, bounded,
-secret-free in the audit, and deduplicated for 24 hours. Agent policy permits a
-send only after an explicit request from a trusted Slack user; periodic runs do
-not inspect or send mail by themselves.
+secret-free in the audit, and deduplicated for 24 hours. A trusted Slack user
+may explicitly request a send. Separately, set `COLLEAGUE_DAILY_SUMMARY_TO` to
+one address in `GMAIL_ALLOWED_RECIPIENTS` to allow an autonomous summary when
+the board changed after its initial baseline. The finalizer permits at most one
+such summary per UTC day and never reads the mailbox to prepare it. If no change
+is pending, the draft is ignored.
 
 ## Data boundary
 

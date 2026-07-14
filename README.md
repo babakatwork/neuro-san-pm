@@ -15,8 +15,8 @@ and audit records never contain tokens or message bodies.
 
 - `neuro-san==0.6.76` core as the only Neuro SAN runtime dependency.
 - A `ProductColleague` front agent with `function.invocation = "event"`.
-- A side-effect-free `ProductManagerAdvisor` for PM judgment and Slack drafts;
-  the front agent remains a small lease/checkpoint/delivery coordinator.
+- A side-effect-free `ProductManagerAdvisor` for PM judgment and communication
+  drafts, plus a deterministic host-side finalizer for delivery and checkpoints.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
 - A host-scoped GitHub Project snapshot tool whose owner/project cannot be
   selected by the model; it reads and digests the full board inside Python.
@@ -36,12 +36,15 @@ and audit records never contain tokens or message bodies.
 flowchart LR
     Cron["Neuro SAN PeriodicEventInitiator"] --> Event["ProductColleague (event)"]
     SlackEvent["Allowlisted Slack event"] --> Bridge["Socket Mode bridge"] --> Event
-    Event --> Gate["Lease + checkpoint"]
+    Event --> Gate["Acquire lease + context"]
     Event --> Inbox["Slack inbox"]
     Event --> Analyst["KanbanAnalyst"]
     Analyst --> Snapshot["Host-side GitHub read + compact snapshot"]
-    Event --> Post["Fixed-channel Slack post"]
-    Event --> Gmail["Optional scoped Gmail assistant"]
+    Event --> Finalizer["Host-side finalizer"]
+    Finalizer --> Post["Fixed-channel Slack post"]
+    Finalizer --> Checkpoint["Checkpoint + release"]
+    Finalizer --> Gmail["Optional daily email summary"]
+    Event --> GmailAssistant["Optional scoped Gmail assistant"]
 ```
 
 The native scheduler discards a periodic agent's final response. That is why
@@ -85,14 +88,21 @@ make trigger
 ```
 
 Review `logs/`, `.state/colleague.json`, and `.state/audit.jsonl`. With dry-run
-enabled, SlackPost returns a preview but sends nothing; its delivery gate also
-keeps teammate requests pending. Once the board summary and policy look right:
+enabled, the finalizer records a Slack preview but sends nothing; its delivery
+gate also keeps teammate requests pending. The board observation itself is
+still checkpointed. Once the board summary and policy look right:
 
 ```dotenv
 COLLEAGUE_SLACK_WRITE_ENABLED=true
 ```
 
 Restart the service after changing `.env` or the cron schedule.
+
+The agent decides whether an unsolicited Slack update is useful. It receives a
+strong suggestion to introduce itself before its first post and another cadence
+hint after 36 hours of silence by default. To enable at-most-daily email
+summaries after real board changes, configure Gmail sending and set
+`COLLEAGUE_DAILY_SUMMARY_TO` to an address in `GMAIL_ALLOWED_RECIPIENTS`.
 
 ## GitHub setup
 
@@ -143,7 +153,7 @@ The bridge forwards a top-level Neuro SAN `ChatRequest` with a `MINIMAL` chat
 filter. It never copies teammate text into that HTTP request; the network reads
 it through the same paginated Slack inbox used by scheduled runs. The caller
 receives an immediate event acknowledgement while the agent continues and
-replies through the fixed-channel SlackPost tool.
+replies through the finalizer's fixed-channel Slack boundary.
 
 See [Slack setup and behavior](docs/slack.md) for the complete checklist. Before
 enabling live posting, read [first run and product-manager

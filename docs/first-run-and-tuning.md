@@ -10,17 +10,24 @@ by default. Each run reads eligible Slack requests, inspects the configured
 GitHub Project, compares the current deterministic snapshot with durable state,
 and decides whether the team needs an update.
 
-It should remain quiet unless one of these conditions applies:
+The colleague has discretion. Useful reasons to speak include:
 
 - this is the first successful board baseline;
 - the board changed materially;
 - a blocker or stale item needs attention;
 - an allowlisted teammate asked it a question;
-- the daily report interval elapsed.
+- the team has not heard from it for the configured cadence (36 hours by default).
+
+These are prompts for judgment, not mandatory posting rules. It should normally
+introduce itself if it has never delivered an update, but it may stay quiet when
+it has nothing useful to add. Every successful observation is checkpointed even
+when it chooses silence.
 
 GitHub access is read-only. The colleague can analyze tickets and recommend
 actions, but it cannot edit tickets, move cards, assign people, or claim that it
-did so. Routine runs do not inspect Gmail.
+did so. Routine runs do not inspect Gmail. If a real board change is pending and
+daily summary sending is configured, it may draft one email summary; the host
+permits at most one per UTC day.
 
 Run the core server and periodic scheduler with:
 
@@ -43,7 +50,8 @@ mention the bot. The channel and allowed users are fixed by host configuration.
 
 ### First successful run
 
-The colleague records its initial board snapshot and normally posts a baseline:
+The colleague records its initial board snapshot and normally introduces itself
+with a useful baseline rather than a generic greeting:
 
 > Initial board baseline: 34 items, 8 in progress, 3 blocked, and 6 without
 > owners. The main delivery risk is the authentication milestone, where two

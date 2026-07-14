@@ -44,6 +44,23 @@ def test_runtime_config_never_returns_secrets(monkeypatch):
     assert "slack-secret-value" not in raw
 
 
+def test_runtime_config_reports_daily_summary_readiness_without_recipient(monkeypatch, tmp_path):
+    set_valid_config(monkeypatch)
+    token = tmp_path / "gmail-token.json"
+    token.write_text("{}")
+    monkeypatch.setenv("COLLEAGUE_GMAIL_ENABLED", "true")
+    monkeypatch.setenv("COLLEAGUE_GMAIL_WRITE_ENABLED", "true")
+    monkeypatch.setenv("GMAIL_TOKEN_PATH", str(token))
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com")
+    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+
+    raw = RuntimeConfig().invoke({}, {})
+    result = json.loads(raw)
+
+    assert result["gmail"]["daily_summary_ready"] is True
+    assert "owner@example.com" not in raw
+
+
 @pytest.mark.parametrize("value", ["not-a-number", "0", "-1"])
 def test_runtime_config_reports_invalid_project_number(monkeypatch, value):
     set_valid_config(monkeypatch)

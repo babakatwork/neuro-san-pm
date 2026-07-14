@@ -63,9 +63,10 @@ class RuntimeConfig(CodedTool):
             for value in os.getenv("GMAIL_ALLOWED_RECIPIENTS", "").split(",")
             if value.strip()
         }
+        daily_summary_to = os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", "").strip().lower()
 
         max_run_seconds, max_run_error = self._safe_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
-        report_interval_hours, report_error = self._safe_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 24)
+        report_interval_hours, report_error = self._safe_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
         stale_after_days, stale_error = self._safe_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
         max_project_items, max_items_error = self._safe_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 500, 1000)
         slack_max_pages, slack_pages_error = self._safe_bounded_int("COLLEAGUE_SLACK_MAX_PAGES", 10, 100)
@@ -133,6 +134,14 @@ class RuntimeConfig(CodedTool):
                 "read_ready": gmail_enabled and gmail_token_path.is_file(),
                 "write_enabled": gmail_write_enabled,
                 "allowed_recipient_count": len(gmail_allowed),
+                "daily_summary_configured": bool(daily_summary_to),
+                "daily_summary_ready": bool(
+                    daily_summary_to
+                    and daily_summary_to in gmail_allowed
+                    and gmail_enabled
+                    and gmail_write_enabled
+                    and gmail_token_path.is_file()
+                ),
                 "query_prefix_configured": bool(os.getenv("GMAIL_QUERY_PREFIX", "in:inbox newer_than:30d").strip()),
             },
             policy={

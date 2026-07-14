@@ -83,7 +83,7 @@ def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):
     assert tools["GmailSend"]["class"].endswith("gmail_send.GmailSend")
 
 
-def test_top_agent_delegates_product_judgment_but_keeps_side_effects(monkeypatch):
+def test_top_agent_has_autonomy_but_finalizes_through_one_host_boundary(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
     network = ConfigFactory.parse_string(
         (ROOT / "registries" / "product_colleague.hocon").read_text(encoding="utf-8"), basedir=ROOT
@@ -91,10 +91,16 @@ def test_top_agent_delegates_product_judgment_but_keeps_side_effects(monkeypatch
     tools = {tool["name"]: tool for tool in network["tools"]}
     frontman = tools["ProductColleague"]
     advisor = tools["ProductManagerAdvisor"]
+    finalizer = tools["RunFinalizer"]
 
     assert "ProductManagerAdvisor" in frontman["tools"]
-    assert "delegate product judgment" in frontman["instructions"]
-    assert "Call ProductManagerAdvisor exactly once" in frontman["instructions"]
+    assert "RunFinalizer" in frontman["tools"]
+    assert "SlackPost" not in frontman["tools"]
+    assert "You decide whether" in frontman["instructions"]
+    assert "Silence is valid" in frontman["instructions"]
+    assert "Conclude every acquired run" in frontman["instructions"]
+    assert tools["ColleagueState"]["function"]["parameters"]["properties"]["action"]["enum"] == ["begin"]
+    assert finalizer["class"].endswith("run_finalizer.RunFinalizer")
     assert advisor["tools"] == []
     assert "no tools and no side-effect authority" in advisor["instructions"]
     assert "SlackPost" not in advisor["tools"]
