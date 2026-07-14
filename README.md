@@ -26,8 +26,10 @@ and audit records never contain tokens or message bodies.
 - Optional Gmail search/read plus allowlisted, lease-bound sending that is off by default.
 - A Socket Mode bridge that sends a body-free wake signal for an allowlisted
   Slack mention or DM; the network then reads the durable inbox itself.
-- Durable state, run leasing, exact-message deduplication, and secret-free audit
-  logging.
+- Durable state, run leasing, exact-message deduplication, request-level
+  at-most-once Slack replies, and secret-free audit logging.
+- Fixed Slack availability notices when the service starts or is deliberately
+  stopped.
 - Docker Compose deployment with one scheduler worker and persistent state.
 - An optional, unserved Playwright computer-use network with observation-only
   tools.
@@ -80,6 +82,11 @@ Start only the persistent Neuro SAN server:
 make run
 ```
 
+After validation succeeds, `make run` posts a fixed online notice when
+`COLLEAGUE_SLACK_WRITE_ENABLED=true`. To receive Slack mentions immediately
+instead of waiting for the next scheduled scan, also start the Socket Mode
+bridge in another terminal as described under [Slack setup](#slack-setup).
+
 In another terminal, manually exercise the same event path used by the
 scheduler:
 
@@ -127,33 +134,93 @@ agent without a resource-validating wrapper and a repository-limited token.
 
 ## Slack setup
 
-Create a Slack app with a bot token and add only the scopes needed for the
-chosen conversation type:
+The bridge is optional. Without it, the periodic run still scans Slack at the
+configured cron interval. With it, an allowlisted mention wakes the same agent
+event path immediately.
+
+### Configure the Slack app
+
+Create a Slack app with a bot user. Under **OAuth & Permissions**, add only the
+bot token scopes needed for the chosen conversation type:
 
 - `chat:write` for outbound updates;
 - `app_mentions:read` for channel wake-ups;
 - `channels:history` for a public channel, `groups:history` for a private
   channel, or `im:history` for a DM.
 
-Invite the bot to the configured channel. Set `SLACK_CHANNEL_ID` to its stable
-ID, `SLACK_BOT_USER_ID` to the bot member's stable ID, and
-`SLACK_ALLOWED_USER_IDS` to a comma-separated list of people allowed to direct
-the colleague. Keep `COLLEAGUE_SLACK_REQUIRE_MENTION=true` unless the selected
+Then configure event delivery:
+
+1. Under **Socket Mode**, enable Socket Mode.
+2. Under **Basic Information > App-Level Tokens**, generate a token with
+   `connections:write`. This is the `xapp-...` value for
+   `SLACK_APP_TOKEN`, not the bot token.
+3. Under **Event Subscriptions**, enable events and add the `app_mention` bot
+   event. Add `message.im` only if direct messages should wake the colleague.
+   Socket Mode does not require a public Request URL.
+4. Reinstall the app to the workspace after changing scopes or subscriptions.
+5. Invite `@Colleague` to the configured channel.
+
+Copy stable Slack IDs rather than display names. In Slack, **Copy link** on a
+channel exposes its `C...` channel ID, while **Copy member ID** from a profile
+provides a `U...` user ID. The app's bot member ID is also a `U...` value.
+
+Configure `.env`:
+
+```dotenv
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_BOT_USER_ID=U...
+SLACK_CHANNEL_ID=C...
+SLACK_ALLOWED_USER_IDS=U123...,U456...
+COLLEAGUE_SLACK_REQUIRE_MENTION=true
+COLLEAGUE_SLACK_WRITE_ENABLED=true
+```
+
+`SLACK_ALLOWED_USER_IDS` is the comma-separated allowlist of teammates who
+may direct the colleague. Keep mention filtering enabled unless the configured
 conversation is a dedicated DM or bot-only channel.
 
-For inbound event wake-ups, enable Socket Mode, create an app-level token with
-`connections:write`, subscribe only to `app_mention` and (if desired)
-`message.im`, then run:
+### Run and verify the bridge
+
+Start the validated Neuro SAN server in one terminal:
+
+```bash
+make run
+```
+
+After the server is listening on port 8080, start Socket Mode in a second
+terminal:
 
 ```bash
 make slack-bridge
 ```
+
+The bridge should log `Starting Slack bridge for one allowlisted channel`.
+Mention `@Colleague` in the configured channel from an allowlisted account.
+The bridge queues body-free event metadata and wakes the server; the agent then
+reads the actual message through its bounded Slack inbox and replies in the
+message thread. Inspect `.state/audit.jsonl` for `slack_inbox`,
+`slack_post`, and run lifecycle events if no reply appears.
 
 The bridge forwards a top-level Neuro SAN `ChatRequest` with a `MINIMAL` chat
 filter. It never copies teammate text into that HTTP request; the network reads
 it through the same paginated Slack inbox used by scheduled runs. The caller
 receives an immediate event acknowledgement while the agent continues and
 replies through the finalizer's fixed-channel Slack boundary.
+
+Each original Slack request can receive at most one accepted reply for 30 days,
+even if a later agent run drafts different wording. This state is kept in
+`.state/slack_reply_ledger.json` without message bodies.
+
+For a planned pause, stop foreground local processes with Ctrl-C and run:
+
+```bash
+make down
+```
+
+`make down` posts a fixed offline notice and stops the Compose services.
+Slack notices are best effort and do not block startup or shutdown. The next
+`make run` or `make up` posts the online notice again.
 
 See [Slack setup and behavior](docs/slack.md) for the complete checklist. Before
 enabling live posting, read [first run and product-manager
@@ -166,9 +233,12 @@ Docker Compose keeps the service alive and mounts the colleague checkpoint on a
 named volume:
 
 ```bash
-docker compose --profile slack up -d --build
+make up
 docker compose logs -f neuro-san slack-bridge
 ```
+
+Use `make down` for a planned shutdown so Slack receives the offline notice
+before Compose removes the services.
 
 The permanent Compose deployment does not publish the Neuro SAN HTTP port to
 the host. `public=false` controls discovery, not endpoint authentication. If
@@ -229,7 +299,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 69 unit/contract tests;
+- 81 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;
@@ -252,6 +322,7 @@ registries/product_colleague.hocon   sample agent network
 registries/manifest.hocon            native periodic schedule
 registries/optional/                 disabled computer-use network
 scripts/check_config.py              offline fail-closed readiness check
+scripts/slack_availability.py        fixed online/offline Slack notices
 scripts/slack_event_admin.py         inspect/requeue/drop dead-letter events
 scripts/start_server.py              validate, then exec the permanent server
 scripts/trigger_event.py             manual event wake-up
