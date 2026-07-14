@@ -47,6 +47,14 @@ def test_sample_uses_host_scoped_github_reader(monkeypatch):
     assert reader["name"] == "GitHubProjectReader"
     assert reader["function"]["parameters"]["properties"] == {}
     assert "owner and project number come only from environment" in analyst["instructions"]
+    assert "existing authoritative Kanban board" in analyst["instructions"]
+    assert "Never recommend" in analyst["instructions"]
+    assert "snapshot you produce is only internal monitoring state" in analyst["instructions"]
+
+    frontman = tools["ProductColleague"]
+    assert "already exists and is the team's authoritative" in frontman["instructions"]
+    assert "never propose or attempt to" in frontman["instructions"]
+    assert "cannot modify GitHub" in frontman["instructions"]
 
 
 def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):
@@ -58,3 +66,21 @@ def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):
     assert tools["GmailAssistant"]["tools"] == ["GmailSearch", "GmailRead", "GmailSend"]
     assert "trusted Slack request" in tools["GmailAssistant"]["instructions"]
     assert tools["GmailSend"]["class"].endswith("gmail_send.GmailSend")
+
+
+def test_top_agent_delegates_product_judgment_but_keeps_side_effects(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network = ConfigFactory.parse_string(
+        (ROOT / "registries" / "product_colleague.hocon").read_text(encoding="utf-8"), basedir=ROOT
+    )
+    tools = {tool["name"]: tool for tool in network["tools"]}
+    frontman = tools["ProductColleague"]
+    advisor = tools["ProductManagerAdvisor"]
+
+    assert "ProductManagerAdvisor" in frontman["tools"]
+    assert "delegate product judgment" in frontman["instructions"]
+    assert "Call ProductManagerAdvisor exactly once" in frontman["instructions"]
+    assert advisor["tools"] == []
+    assert "no tools and no side-effect authority" in advisor["instructions"]
+    assert "SlackPost" not in advisor["tools"]
+    assert "ColleagueState" not in advisor["tools"]

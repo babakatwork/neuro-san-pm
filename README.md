@@ -15,6 +15,8 @@ and audit records never contain tokens or message bodies.
 
 - `neuro-san==0.6.76` core as the only Neuro SAN runtime dependency.
 - A `ProductColleague` front agent with `function.invocation = "event"`.
+- A side-effect-free `ProductManagerAdvisor` for PM judgment and Slack drafts;
+  the front agent remains a small lease/checkpoint/delivery coordinator.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
 - A host-scoped, query-only GitHub Project reader whose owner/project cannot be
   selected by the model, plus read-only MCP templates for future networks.
@@ -216,7 +218,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 68 unit/contract tests;
+- 69 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;
