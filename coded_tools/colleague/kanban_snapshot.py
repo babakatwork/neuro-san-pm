@@ -16,6 +16,7 @@ from neuro_san.interfaces.coded_tool import CodedTool
 from coded_tools.colleague._runtime import json_result
 
 DONE_STATUSES = {"closed", "complete", "completed", "done", "shipped"}
+MAX_ATTENTION_ITEMS = 20
 
 
 class KanbanSnapshot(CodedTool):
@@ -42,6 +43,7 @@ class KanbanSnapshot(CodedTool):
         encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
         digest = hashlib.sha256(encoded).hexdigest()
         status_counts = dict(sorted(Counter(item["status"] for item in items).items()))
+        priority_counts = dict(sorted(Counter(item["priority"] or "No priority" for item in items).items()))
         try:
             stale_after_days = int(os.getenv("COLLEAGUE_STALE_AFTER_DAYS", "14"))
         except ValueError:
@@ -55,14 +57,19 @@ class KanbanSnapshot(CodedTool):
             if "block" in item["status"].lower() or any("block" in label.lower() for label in item["labels"])
         ]
         snapshot = {
-            **canonical,
+            "project_title": canonical["project_title"],
+            "project_url": canonical["project_url"],
             "digest": digest,
             "item_count": len(items),
             "status_counts": status_counts,
+            "priority_counts": priority_counts,
+            "missing_assignee_count": sum(not item["assignees"] for item in items),
             "attention": {
-                "blocked": blocked[:50],
+                "blocked": blocked[:MAX_ATTENTION_ITEMS],
+                "blocked_count": len(blocked),
                 "missing_status_count": status_counts.get("No status", 0),
-                "stale": stale[:50],
+                "stale": stale[:MAX_ATTENTION_ITEMS],
+                "stale_count": len(stale),
                 "stale_after_days": stale_after_days,
             },
         }

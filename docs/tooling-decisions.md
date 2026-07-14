@@ -23,9 +23,11 @@ read-only URLs, the current header key, and per-tool allowlists.
 
 Read-only is not resource scoping: a raw MCP tool can still read any project or
 repository authorized by its token. The sample therefore does not attach those
-MCP tools. `GitHubProjectReader` takes no owner/project arguments and uses one
-constant query against host-owned coordinates. The MCP entries remain templates
-for future networks that add an equivalent validating boundary.
+MCP tools. `GitHubKanbanSnapshot` takes no owner/project selection arguments and
+uses one constant query against host-owned coordinates. It keeps the raw board
+inside coded Python, computes the digest there, and exposes only aggregates and
+bounded attention items to the analyst. The MCP entries remain templates for
+future networks that add an equivalent validating boundary.
 
 ## Existing `slack.py`
 

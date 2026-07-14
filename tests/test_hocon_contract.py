@@ -35,26 +35,41 @@ def test_mcp_is_read_only_and_uses_current_header_key(monkeypatch):
     }
 
 
-def test_sample_uses_host_scoped_github_reader(monkeypatch):
+def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
     network_path = ROOT / "registries" / "product_colleague.hocon"
     network = ConfigFactory.parse_string(network_path.read_text(encoding="utf-8"), basedir=ROOT)
 
     tools = {tool["name"]: tool for tool in network["tools"]}
     analyst = tools["KanbanAnalyst"]
-    reader = tools["GitHubProjectReader"]
-    assert analyst["tools"] == ["GitHubProjectReader", "KanbanSnapshot"]
-    assert reader["name"] == "GitHubProjectReader"
-    assert reader["function"]["parameters"]["properties"] == {}
-    assert "owner and project number come only from environment" in analyst["instructions"]
+    snapshot = tools["GitHubKanbanSnapshot"]
+    assert analyst["tools"] == ["GitHubKanbanSnapshot"]
+    assert snapshot["name"] == "GitHubKanbanSnapshot"
+    assert snapshot["function"]["parameters"]["properties"]["request"]["enum"] == [
+        "snapshot_configured_project"
+    ]
+    assert "owner and project number come only" in analyst["instructions"]
     assert "existing authoritative Kanban board" in analyst["instructions"]
     assert "Never recommend" in analyst["instructions"]
     assert "snapshot you produce is only internal monitoring state" in analyst["instructions"]
+    assert "bounded attention items instead of every card" in analyst["instructions"]
 
     frontman = tools["ProductColleague"]
     assert "already exists and is the team's authoritative" in frontman["instructions"]
     assert "never propose or attempt to" in frontman["instructions"]
     assert "cannot modify GitHub" in frontman["instructions"]
+
+
+def test_callable_function_schemas_have_at_least_one_property(monkeypatch):
+    """Catch a Neuro SAN execution constraint that its HOCON validator misses."""
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network_path = ROOT / "registries" / "product_colleague.hocon"
+    network = ConfigFactory.parse_string(network_path.read_text(encoding="utf-8"), basedir=ROOT)
+
+    for tool in network["tools"]:
+        parameters = tool["function"].get("parameters", None)
+        if parameters is not None:
+            assert parameters.get("properties"), tool["name"]
 
 
 def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):

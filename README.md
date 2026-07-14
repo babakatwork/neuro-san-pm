@@ -18,9 +18,10 @@ and audit records never contain tokens or message bodies.
 - A side-effect-free `ProductManagerAdvisor` for PM judgment and Slack drafts;
   the front agent remains a small lease/checkpoint/delivery coordinator.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
-- A host-scoped, query-only GitHub Project reader whose owner/project cannot be
-  selected by the model, plus read-only MCP templates for future networks.
-- A deterministic Kanban snapshot/digest tool for stable change detection.
+- A host-scoped GitHub Project snapshot tool whose owner/project cannot be
+  selected by the model; it reads and digests the full board inside Python.
+- Compact deterministic change state: aggregate counts and bounded attention
+  items reach the LLM, while all cards still contribute to the digest.
 - Slack inbox and outbound tools constrained to one channel and explicit users.
 - Optional Gmail search/read plus allowlisted, lease-bound sending that is off by default.
 - A Socket Mode bridge that sends a body-free wake signal for an allowlisted
@@ -38,8 +39,7 @@ flowchart LR
     Event --> Gate["Lease + checkpoint"]
     Event --> Inbox["Slack inbox"]
     Event --> Analyst["KanbanAnalyst"]
-    Analyst --> GitHub["Host-scoped GitHub GraphQL reader"]
-    Analyst --> Snapshot["Deterministic snapshot"]
+    Analyst --> Snapshot["Host-side GitHub read + compact snapshot"]
     Event --> Post["Fixed-channel Slack post"]
     Event --> Gmail["Optional scoped Gmail assistant"]
 ```
@@ -103,11 +103,12 @@ URL—not a repository number. Use a dedicated token with:
 - `read:org` if the organization requires it;
 - read-only repository access for private issue/PR details, if needed.
 
-The sample agent does not receive raw GitHub MCP tools. Its coded reader has no
-resource arguments and reads only `GITHUB_PROJECT_OWNER` plus
+The sample agent does not receive raw GitHub MCP tools. Its coded snapshot tool
+has no resource-selection arguments and reads only `GITHUB_PROJECT_OWNER` plus
 `GITHUB_PROJECT_NUMBER` from the host, so prompt text cannot redirect it to a
-different project or repository. It uses a constant GraphQL query and returns
-only bounded Kanban fields; no mutation exists.
+different project or repository. It uses a constant GraphQL query, computes a
+digest over every normalized item inside the host, and returns only aggregate
+counts plus bounded attention items to the LLM; no mutation exists.
 
 [`mcp/mcp_info.hocon`](mcp/mcp_info.hocon) also records explicit hosted
 `/projects/readonly`, `/issues/readonly`, and `/pull_requests/readonly`

@@ -28,7 +28,12 @@ def test_snapshot_is_deterministic_and_surfaces_attention(monkeypatch):
 
     assert first["digest"] == second["digest"]
     assert first["status_counts"] == {"Blocked": 1, "Done": 1, "No status": 1}
+    assert first["priority_counts"] == {"No priority": 3}
+    assert first["missing_assignee_count"] == 3
+    assert "items" not in first
     assert first["attention"]["missing_status_count"] == 1
+    assert first["attention"]["blocked_count"] == 1
+    assert first["attention"]["stale_count"] == 1
     assert [item["id"] for item in first["attention"]["blocked"]] == ["2"]
     assert {item["id"] for item in first["attention"]["stale"]} == {"2"}
 
