@@ -18,6 +18,14 @@ fail-closed restart instead of a silently ineffective scheduler.
 The sample also fixes the internal HTTP port at 8080 so the health check and
 Slack bridge cannot drift from the server listener.
 
+`make run` posts a fixed online notice to the configured Slack channel after
+configuration validation succeeds. Use `make down` for a planned pause: it
+posts a fixed offline notice and then stops the Compose services. Availability
+notices honor `COLLEAGUE_SLACK_WRITE_ENABLED` and are best effort, so a Slack
+outage does not prevent startup or shutdown. If running locally rather than
+through Compose, stop the foreground server and bridge with Ctrl-C before
+calling `make down`.
+
 ## Scheduling rules
 
 The default cron expression is `*/15 * * * *`, evaluated in the server's local

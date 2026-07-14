@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from scripts.check_config import main as check_config
+from scripts.slack_availability import set_availability
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -60,6 +61,7 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}")
         return 1
+    set_availability("online")
     os.execv(command[0], command)
     return 0  # pragma: no cover - os.execv replaces the process on success
 

@@ -31,4 +31,5 @@ up:
 	docker compose --profile slack up -d --build
 
 down:
+	.venv/bin/python -m scripts.slack_availability offline
 	docker compose --profile slack down
