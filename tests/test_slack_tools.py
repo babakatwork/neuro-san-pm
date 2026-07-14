@@ -9,6 +9,7 @@ from coded_tools.colleague.slack_event_queue import pending_events
 from coded_tools.colleague.slack_inbox import SlackInbox
 from coded_tools.colleague.slack_inbox_batch import create_batch
 from coded_tools.colleague.slack_post import SlackPost
+from coded_tools.colleague.slack_reply_ledger import mark_request_answered
 
 
 def set_slack_config(monkeypatch, tmp_path):
@@ -277,6 +278,92 @@ def test_slack_post_uses_fixed_channel_plain_text_and_deduplicates(monkeypatch, 
     assert payload["unfurl_media"] is False
     assert "<!channel>" not in payload["text"]
     assert "<@U9>" not in payload["text"]
+
+
+def test_slack_post_never_answers_the_same_request_twice(monkeypatch, tmp_path):
+    set_slack_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLEAGUE_SLACK_WRITE_ENABLED", "true")
+    calls = []
+
+    def fake_call(self, method, *, http_method, payload):
+        del self, method, http_method
+        calls.append(payload)
+        return {"ok": True, "ts": "20.0"}
+
+    monkeypatch.setattr(SlackApiClient, "call", fake_call)
+    first_run = begin_run()
+    first_batch = create_batch(
+        first_run,
+        "11.0",
+        [{"ts": "10.0", "thread_ts": "10.0", "event_ids": []}],
+    )
+    first = json.loads(
+        SlackPost().invoke(
+            {
+                "text": "The first answer.",
+                "run_id": first_run,
+                "inbox_batch_id": first_batch,
+                "reply_to_ts": "10.0",
+            },
+            {},
+        )
+    )
+    ColleagueState().invoke({"action": "finish", "run_id": first_run}, {})
+
+    second_run = begin_run()
+    second_batch = create_batch(
+        second_run,
+        "12.0",
+        [{"ts": "10.0", "thread_ts": "10.0", "event_ids": []}],
+    )
+    second = json.loads(
+        SlackPost().invoke(
+            {
+                "text": "A differently worded second answer.",
+                "run_id": second_run,
+                "inbox_batch_id": second_batch,
+                "reply_to_ts": "10.0",
+            },
+            {},
+        )
+    )
+
+    assert first["sent"] is True
+    assert second["duplicate"] is True
+    assert second["reason"] == "request_already_answered"
+    assert len(calls) == 1
+
+
+def test_slack_inbox_filters_answered_requests_and_completes_socket_events(monkeypatch, tmp_path):
+    set_slack_config(monkeypatch, tmp_path)
+    event = {
+        "channel": "C123",
+        "user": "U1",
+        "text": "<@B123> already answered",
+        "ts": "12.0",
+        "thread_ts": "10.0",
+    }
+    mark_request_answered("C123", "12.0", "13.0")
+    assert claim_event("EvAnswered", event) is True
+    run_id = begin_run()
+
+    def fake_call(self, method, *, http_method, payload):
+        del self, http_method, payload
+        if method == "conversations.history":
+            return {"ok": True, "messages": [], "response_metadata": {"next_cursor": ""}}
+        return {
+            "ok": True,
+            "messages": [event],
+            "response_metadata": {"next_cursor": ""},
+        }
+
+    monkeypatch.setattr(SlackApiClient, "call", fake_call)
+    result = json.loads(SlackInbox().invoke({"oldest": "11.0", "run_id": run_id}, {}))
+
+    assert result["ok"] is True
+    assert result["messages"] == []
+    assert result["already_answered_count"] == 1
+    assert pending_events("C123", {"U1"}) == []
 
 
 def test_slack_post_rejects_missing_run_lease(monkeypatch, tmp_path):

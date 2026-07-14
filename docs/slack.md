@@ -34,6 +34,13 @@ request the agent supplies that ID and the request's `ts`. Host-owned batch stat
 resolves the actual thread and rejects invented or cross-run handles. `sly_data`
 is ignored. The tool also requires the active run lease ID.
 
+Accepted replies are also recorded in a body-free, durable
+`.state/slack_reply_ledger.json` ledger. The key is derived from the configured
+channel and the original Slack request timestamp. This gives each teammate
+request at-most-once reply semantics for 30 days: a later run does not show an
+answered request to the agent, and the posting boundary rejects a second answer
+even when its wording differs. Unanswered requests remain eligible for retry.
+
 Messages are capped at 3,500 characters. Exact messages to the same channel and
 thread are suppressed for `COLLEAGUE_SLACK_DEDUPE_SECONDS` (six hours by
 default). Model-produced angle brackets are escaped, Slack formatting is

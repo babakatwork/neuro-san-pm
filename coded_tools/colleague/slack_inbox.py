@@ -16,10 +16,12 @@ from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague._runtime import read_env_bool
 from coded_tools.colleague._slack_client import SlackApiClient
 from coded_tools.colleague._slack_client import SlackApiError
+from coded_tools.colleague.slack_event_queue import complete_events
 from coded_tools.colleague.slack_event_queue import pending_events
 from coded_tools.colleague.slack_event_queue import quarantine_ineligible_events
 from coded_tools.colleague.slack_event_queue import record_resolution_failure
 from coded_tools.colleague.slack_inbox_batch import create_batch
+from coded_tools.colleague.slack_reply_ledger import answered_request_timestamps
 
 SLACK_TS_RE = re.compile(r"(?:0|\d+\.\d+)")
 
@@ -170,6 +172,27 @@ class SlackInbox(CodedTool):
                 )
 
         all_messages = sorted(messages_by_ts.values(), key=lambda message: float(message["ts"]))
+        try:
+            answered_timestamps = answered_request_timestamps(
+                channel,
+                [str(message["ts"]) for message in all_messages],
+            )
+            answered_event_ids = sorted(
+                {
+                    event_id
+                    for message in all_messages
+                    if message["ts"] in answered_timestamps
+                    for event_id in message.get("event_ids", [])
+                    if isinstance(event_id, str)
+                }
+            )
+            complete_events(answered_event_ids)
+        except (OSError, ValueError) as exc:
+            error = str(exc) if isinstance(exc, ValueError) else "Slack reply ledger is unavailable"
+            append_audit("slack_inbox", ok=False, error=error)
+            return json_result(ok=False, error=error)
+        all_messages = [message for message in all_messages if message["ts"] not in answered_timestamps]
+        already_answered_count = len(answered_timestamps)
         deferred_count = max(0, len(all_messages) - max_requests) + queued_deferred_count
         messages = all_messages[:max_requests]
         checkpoint_ts = scan_upper
@@ -195,6 +218,7 @@ class SlackInbox(CodedTool):
             message_count=len(messages),
             scanned_count=len(raw_history),
             socket_event_count=len(selected_event_ids),
+            already_answered_count=already_answered_count,
         )
         return json_result(
             ok=True,
@@ -202,6 +226,7 @@ class SlackInbox(CodedTool):
             checkpoint_ts=checkpoint_ts,
             inbox_batch_id=inbox_batch_id,
             scanned_count=len(raw_history),
+            already_answered_count=already_answered_count,
             complete=True,
             deferred_count=deferred_count,
             bootstrap=bootstrap,

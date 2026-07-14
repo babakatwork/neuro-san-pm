@@ -23,6 +23,8 @@ from coded_tools.colleague._slack_client import SlackApiClient
 from coded_tools.colleague._slack_client import SlackApiError
 from coded_tools.colleague.slack_inbox_batch import mark_delivered
 from coded_tools.colleague.slack_inbox_batch import reply_thread
+from coded_tools.colleague.slack_reply_ledger import mark_request_answered
+from coded_tools.colleague.slack_reply_ledger import request_was_answered
 
 
 class SlackPost(CodedTool):
@@ -58,6 +60,22 @@ class SlackPost(CodedTool):
             thread_ts = reply_thread(inbox_batch_id, run_id, reply_to_ts) if inbox_batch_id else None
         except (OSError, ValueError) as exc:
             return json_result(ok=False, sent=False, error=str(exc))
+
+        if inbox_batch_id:
+            try:
+                if request_was_answered(channel, reply_to_ts):
+                    mark_delivered(inbox_batch_id, run_id, reply_to_ts)
+                    append_audit("slack_post", sent=False, duplicate=True, reason="request_already_answered")
+                    return json_result(
+                        ok=True,
+                        sent=False,
+                        duplicate=True,
+                        reason="request_already_answered",
+                    )
+            except (OSError, ValueError) as exc:
+                error = str(exc) if isinstance(exc, ValueError) else "Slack reply ledger is unavailable"
+                append_audit("slack_post", sent=False, error=error)
+                return json_result(ok=False, sent=False, error=error)
 
         prefix = os.getenv("COLLEAGUE_SLACK_MESSAGE_PREFIX", "[neuro-san colleague]").strip()
         # Slack mention/control syntax is angle-bracket based. Escape the whole
@@ -102,6 +120,7 @@ class SlackPost(CodedTool):
                 delivery["sent"] = sent
                 if fingerprint in sent:
                     if inbox_batch_id:
+                        mark_request_answered(channel, reply_to_ts)
                         mark_delivered(inbox_batch_id, run_id, reply_to_ts)
                     append_audit("slack_post", sent=False, duplicate=True, message_sha256=fingerprint)
                     return json_result(ok=True, sent=False, duplicate=True, message_sha256=fingerprint)
@@ -119,6 +138,15 @@ class SlackPost(CodedTool):
                 sent[fingerprint] = now
                 atomic_write_json(delivery_path, delivery)
             if inbox_batch_id:
+                message_ts = str(body.get("ts", ""))
+                try:
+                    mark_request_answered(channel, reply_to_ts, message_ts)
+                except (OSError, ValueError) as exc:
+                    append_audit(
+                        "slack_reply_ledger",
+                        ok=False,
+                        error=(str(exc) if isinstance(exc, ValueError) else "state_unavailable"),
+                    )
                 mark_delivered(inbox_batch_id, run_id, reply_to_ts)
         except (OSError, TypeError, ValueError, SlackApiError) as exc:
             error = str(exc) if isinstance(exc, (SlackApiError, ValueError)) else "Slack delivery state is unavailable"
