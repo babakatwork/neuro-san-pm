@@ -109,7 +109,38 @@ The agent decides whether an unsolicited Slack update is useful. It receives a
 strong suggestion to introduce itself before its first post and another cadence
 hint after 36 hours of silence by default. To enable at-most-daily email
 summaries after real board changes, configure Gmail sending and set
-`COLLEAGUE_DAILY_SUMMARY_TO` to an address in `GMAIL_ALLOWED_RECIPIENTS`.
+`COLLEAGUE_DAILY_SUMMARY_TO` to a comma-separated subset of
+`GMAIL_ALLOWED_RECIPIENTS`. Each recipient receives a separate message.
+
+```dotenv
+GMAIL_ALLOWED_RECIPIENTS=owner@example.com,teammate@example.com
+COLLEAGUE_DAILY_SUMMARY_TO=owner@example.com,teammate@example.com
+```
+
+Every daily-summary recipient must be in the allowlist. Duplicate addresses are
+removed, comparison is case-insensitive, and at most 20 recipients are
+accepted.
+
+## Periodic schedule
+
+The default heartbeat runs every 15 minutes. To run it once per hour, set this
+in `.env`:
+
+```dotenv
+COLLEAGUE_CRON_SCHEDULE="0 * * * *"
+```
+
+For an exported shell variable, quote the cron expression:
+
+```bash
+export COLLEAGUE_CRON_SCHEDULE='0 * * * *'
+```
+
+Restart the server after changing the schedule. For Compose, use `make down`
+followed by `make up`; for a local foreground server, stop it with Ctrl-C and
+run `make run` again. Cron uses the server's local timezone. The Socket Mode
+bridge is independent of this cadence, so allowlisted Slack mentions continue
+to wake the agent immediately.
 
 ## GitHub setup
 
@@ -299,7 +330,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 81 unit/contract tests;
+- 85 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;

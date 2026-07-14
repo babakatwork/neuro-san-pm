@@ -47,14 +47,19 @@ def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, t
     )
     state_tool.invoke({"action": "finish", "run_id": first_run}, {})
     run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
+    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
+    recipients = []
     monkeypatch.setattr(
         "coded_tools.colleague.run_finalizer.SlackPost.invoke",
         lambda self, args, sly_data: json.dumps({"ok": True, "sent": True, "message_ts": "30.0"}),
     )
     monkeypatch.setattr(
         "coded_tools.colleague.run_finalizer.GmailSend.invoke",
-        lambda self, args, sly_data: json.dumps({"ok": True, "sent": True, "message_id": "mail-1"}),
+        lambda self, args, sly_data: (
+            recipients.append(args["to"])
+            or json.dumps({"ok": True, "sent": True, "message_id": f"mail-{len(recipients)}"})
+        ),
     )
 
     result = json.loads(
@@ -73,9 +78,49 @@ def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, t
     assert result["board_changed"] is True
     assert result["slack_update"]["sent"] is True
     assert result["email_summary"]["sent"] is True
+    assert result["email_summary"]["delivered"] is True
+    assert result["email_summary"]["recipient_count"] == 2
+    assert recipients == ["owner@example.com", "team@example.com"]
     assert state["last_notified_digest"] == "b" * 64
     assert state["daily_email_pending"] is False
     assert state["last_email_summary_at"]
+
+
+def test_partial_daily_summary_delivery_remains_pending(monkeypatch, tmp_path):
+    first_run = _begin(monkeypatch, tmp_path)
+    state_tool = ColleagueState()
+    state_tool.invoke(
+        {"action": "checkpoint", "run_id": first_run, "board_snapshot": {"digest": "a" * 64}},
+        {},
+    )
+    state_tool.invoke({"action": "finish", "run_id": first_run}, {})
+    run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
+    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
+
+    def send(self, args, sly_data):
+        del self, sly_data
+        if args["to"] == "owner@example.com":
+            return json.dumps({"ok": True, "sent": True, "message_id": "mail-1"})
+        return json.dumps({"ok": False, "sent": False, "error": "Gmail send failed"})
+
+    monkeypatch.setattr("coded_tools.colleague.run_finalizer.GmailSend.invoke", send)
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "board_snapshot": {"digest": "b" * 64},
+                "email_summary": {"subject": "Daily summary", "body": "Changed."},
+            },
+            {},
+        )
+    )
+
+    state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
+    assert result["email_summary"]["delivered"] is False
+    assert result["email_summary"]["delivered_count"] == 1
+    assert state["daily_email_pending"] is True
+    assert state["last_email_summary_at"] is None
 
 
 def test_second_change_same_day_remains_pending_without_second_email(monkeypatch, tmp_path):

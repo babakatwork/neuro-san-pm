@@ -15,6 +15,11 @@ from packaging.version import Version
 from pyhocon import ConfigFactory
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients  # noqa: E402
+
 TRUE_ENV_VALUES = frozenset({"1", "true", "t", "yes", "y", "on"})
 FALSE_ENV_VALUES = frozenset({"0", "false", "f", "no", "n", "off"})
 
@@ -143,14 +148,12 @@ def main() -> int:
 
     if not write_enabled:
         warnings.append("Slack posting is in dry-run mode (recommended for the first run)")
-    daily_summary_to = os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", "").strip().lower()
-    gmail_allowed = {
-        value.strip().lower()
-        for value in os.getenv("GMAIL_ALLOWED_RECIPIENTS", "").split(",")
-        if value.strip()
-    }
-    if daily_summary_to and daily_summary_to not in gmail_allowed:
-        warnings.append("COLLEAGUE_DAILY_SUMMARY_TO is not in GMAIL_ALLOWED_RECIPIENTS; summaries will not send")
+    daily_summary_recipients, daily_summary_error = validate_daily_summary_recipients(
+        os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
+        os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),
+    )
+    if daily_summary_recipients and daily_summary_error:
+        warnings.append(f"{daily_summary_error}; summaries will not send")
 
     for warning in warnings:
         print(f"WARNING: {warning}")

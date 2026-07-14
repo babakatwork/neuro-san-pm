@@ -6,7 +6,6 @@ import asyncio
 import base64
 import hashlib
 import os
-import re
 import time
 from email.message import EmailMessage
 from pathlib import Path
@@ -24,8 +23,8 @@ from coded_tools.colleague._runtime import exclusive_file_lock
 from coded_tools.colleague._runtime import has_active_lease
 from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague._runtime import read_json
-
-_EMAIL_RE = re.compile(r"^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$")
+from coded_tools.colleague.gmail_recipients import is_email_address
+from coded_tools.colleague.gmail_recipients import parse_email_list
 
 
 class GmailSend(CodedTool):
@@ -41,16 +40,12 @@ class GmailSend(CodedTool):
         recipient = str(args.get("to", "")).strip().lower()
         subject = str(args.get("subject", "")).strip()
         body = str(args.get("body", "")).strip()
-        allowed = {
-            item.strip().lower()
-            for item in os.getenv("GMAIL_ALLOWED_RECIPIENTS", "").split(",")
-            if item.strip()
-        }
+        allowed = set(parse_email_list(os.getenv("GMAIL_ALLOWED_RECIPIENTS", "")))
         if not env_bool("COLLEAGUE_GMAIL_ENABLED", False):
             return json_result(ok=False, sent=False, error="Gmail access is disabled")
         if not has_active_lease(run_id):
             return json_result(ok=False, sent=False, error="run_id does not own an active colleague lease")
-        if not _EMAIL_RE.fullmatch(recipient) or recipient not in allowed:
+        if not is_email_address(recipient) or recipient not in allowed:
             return json_result(ok=False, sent=False, error="recipient is not in GMAIL_ALLOWED_RECIPIENTS")
         if not subject or len(subject) > 200 or "\n" in subject or "\r" in subject:
             return json_result(ok=False, sent=False, error="subject is invalid or exceeds 200 characters")

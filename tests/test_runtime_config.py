@@ -51,14 +51,16 @@ def test_runtime_config_reports_daily_summary_readiness_without_recipient(monkey
     monkeypatch.setenv("COLLEAGUE_GMAIL_ENABLED", "true")
     monkeypatch.setenv("COLLEAGUE_GMAIL_WRITE_ENABLED", "true")
     monkeypatch.setenv("GMAIL_TOKEN_PATH", str(token))
-    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com")
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
+    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
 
     raw = RuntimeConfig().invoke({}, {})
     result = json.loads(raw)
 
     assert result["gmail"]["daily_summary_ready"] is True
+    assert result["gmail"]["daily_summary_recipient_count"] == 2
     assert "owner@example.com" not in raw
+    assert "team@example.com" not in raw
 
 
 @pytest.mark.parametrize("value", ["not-a-number", "0", "-1"])

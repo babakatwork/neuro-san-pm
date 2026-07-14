@@ -15,6 +15,7 @@ from coded_tools.colleague._runtime import append_audit
 from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague._runtime import utc_now_iso
 from coded_tools.colleague.colleague_state import ColleagueState
+from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients
 from coded_tools.colleague.gmail_send import GmailSend
 from coded_tools.colleague.slack_post import SlackPost
 
@@ -40,6 +41,10 @@ def _same_utc_day(value: object, now: datetime) -> bool:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).date() == now.date()
+
+
+def _summary_delivered(value: dict[str, Any]) -> bool:
+    return bool(value.get("delivered"))
 
 
 class RunFinalizer(CodedTool):
@@ -109,7 +114,10 @@ class RunFinalizer(CodedTool):
 
             email_result: dict[str, Any] = {"skipped": True, "reason": "agent chose no summary"}
             email_summary = args.get("email_summary")
-            summary_recipient = os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", "").strip().lower()
+            summary_recipients, summary_recipient_error = validate_daily_summary_recipients(
+                os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
+                os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),
+            )
             summary_sent_today = _same_utc_day(state.get("last_email_summary_at"), now)
             if email_summary is not None:
                 if not isinstance(email_summary, dict):
@@ -118,21 +126,38 @@ class RunFinalizer(CodedTool):
                     email_result = {"skipped": True, "reason": "no board change is awaiting a summary"}
                 elif summary_sent_today:
                     email_result = {"skipped": True, "reason": "a daily summary was already sent today"}
-                elif not summary_recipient:
+                elif not summary_recipients:
                     email_result = {"skipped": True, "reason": "COLLEAGUE_DAILY_SUMMARY_TO is not configured"}
+                elif summary_recipient_error:
+                    email_result = {"skipped": True, "reason": summary_recipient_error}
                 else:
-                    email_result = _result(
-                        GmailSend().invoke(
-                            {
-                                "run_id": run_id,
-                                "to": summary_recipient,
-                                "subject": str(email_summary.get("subject", "")).strip(),
-                                "body": str(email_summary.get("body", "")).strip(),
-                            },
-                            {},
+                    subject = str(email_summary.get("subject", "")).strip()
+                    body = str(email_summary.get("body", "")).strip()
+                    recipient_results = [
+                        _result(
+                            GmailSend().invoke(
+                                {
+                                    "run_id": run_id,
+                                    "to": recipient,
+                                    "subject": subject,
+                                    "body": body,
+                                },
+                                {},
+                            )
                         )
-                    )
-                    if _delivered(email_result):
+                        for recipient in summary_recipients
+                    ]
+                    delivered_count = sum(_delivered(result) for result in recipient_results)
+                    email_result = {
+                        "ok": all(result.get("ok") for result in recipient_results),
+                        "sent": any(result.get("sent") for result in recipient_results),
+                        "duplicate": all(result.get("duplicate") for result in recipient_results),
+                        "delivered": delivered_count == len(summary_recipients),
+                        "recipient_count": len(summary_recipients),
+                        "delivered_count": delivered_count,
+                        "results": recipient_results,
+                    }
+                    if _summary_delivered(email_result):
                         daily_email_pending = False
 
             checkpoint_args: dict[str, Any] = {
@@ -145,7 +170,7 @@ class RunFinalizer(CodedTool):
             if _delivered(slack_result) and digest:
                 checkpoint_args["last_report_at"] = now_iso
                 checkpoint_args["last_notified_digest"] = digest
-            if _delivered(email_result):
+            if _summary_delivered(email_result):
                 checkpoint_args["last_email_summary_at"] = now_iso
             board_checkpoint = _result(state_tool.invoke(checkpoint_args, {}))
 
@@ -171,7 +196,7 @@ class RunFinalizer(CodedTool):
                 ok=ok,
                 board_changed=board_changed,
                 slack_update_delivered=_delivered(slack_result),
-                email_summary_delivered=_delivered(email_result),
+                email_summary_delivered=_summary_delivered(email_result),
                 reply_count=len(reply_results),
                 inbox_advanced=bool(inbox_checkpoint.get("ok")),
             )
