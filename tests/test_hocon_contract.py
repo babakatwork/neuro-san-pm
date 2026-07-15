@@ -53,11 +53,24 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     assert "Never recommend" in analyst["instructions"]
     assert "snapshot you produce is only internal monitoring state" in analyst["instructions"]
     assert "bounded attention items instead of every card" in analyst["instructions"]
+    assert "physical top-to-bottom order" in analyst["instructions"]
+    assert "Priority field" in analyst["instructions"]
+    assert "must be ignored" in analyst["instructions"]
+    assert "Do not invent" in analyst["instructions"]
+    assert "assignees with unusually high active WIP" in analyst["instructions"]
+    assert "not column-movement history" in analyst["instructions"]
 
     frontman = tools["ProductColleague"]
     assert "already exists and is the team's authoritative" in frontman["instructions"]
     assert "never propose or attempt to" in frontman["instructions"]
     assert "cannot modify GitHub" in frontman["instructions"]
+    assert "vertical card order" in frontman["instructions"]
+
+    advisor = tools["ProductManagerAdvisor"]
+    assert "Limit WIP conceptually" in advisor["instructions"]
+    assert "authoritative priority" in advisor["instructions"]
+    assert "Higher cards are higher priority" in advisor["instructions"]
+    assert "frame overload as a flow risk" in advisor["instructions"]
 
 
 def test_callable_function_schemas_have_at_least_one_property(monkeypatch):

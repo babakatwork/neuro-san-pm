@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from coded_tools.colleague._slack_client import SlackApiClient
 from coded_tools.colleague._slack_client import SlackApiError
 from coded_tools.colleague.colleague_state import ColleagueState
@@ -247,6 +249,16 @@ def test_slack_post_is_dry_run_by_default(monkeypatch, tmp_path):
     assert result["sent"] is False
     assert result["dry_run"] is True
     assert "Board is healthy." in result["preview"]
+
+
+@pytest.mark.parametrize("text", [None, "NONE", " none ", "null"])
+def test_slack_post_rejects_null_or_sentinel_text(monkeypatch, tmp_path, text):
+    set_slack_config(monkeypatch, tmp_path)
+    run_id = begin_run()
+
+    result = json.loads(SlackPost().invoke({"text": text, "run_id": run_id}, {}))
+
+    assert result == {"error": "text is required", "ok": False, "sent": False}
 
 
 def test_slack_post_uses_fixed_channel_plain_text_and_deduplicates(monkeypatch, tmp_path):

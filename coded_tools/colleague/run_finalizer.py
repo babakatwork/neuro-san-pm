@@ -31,6 +31,15 @@ def _delivered(value: dict[str, Any]) -> bool:
     return bool(value.get("sent") or value.get("duplicate"))
 
 
+def _text(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _optional_draft(value: object) -> str:
+    text = _text(value)
+    return "" if text.casefold() in {"none", "null"} else text
+
+
 def _same_utc_day(value: object, now: datetime) -> bool:
     if not value:
         return False
@@ -75,7 +84,7 @@ class RunFinalizer(CodedTool):
             now = datetime.now(timezone.utc)
             now_iso = utc_now_iso()
 
-            slack_update = str(args.get("slack_update", "")).strip()
+            slack_update = _optional_draft(args.get("slack_update"))
             slack_result: dict[str, Any] = {"skipped": True, "reason": "agent chose no update"}
             if slack_update:
                 slack_result = _result(SlackPost().invoke({"run_id": run_id, "text": slack_update}, {}))
@@ -96,8 +105,8 @@ class RunFinalizer(CodedTool):
                 if not isinstance(reply, dict):
                     reply_results.append({"ok": False, "sent": False, "error": "reply must be an object"})
                     continue
-                request_ts = str(reply.get("request_ts", "")).strip()
-                text = str(reply.get("text", "")).strip()
+                request_ts = _text(reply.get("request_ts"))
+                text = _optional_draft(reply.get("text"))
                 reply_results.append(
                     _result(
                         SlackPost().invoke(
@@ -131,8 +140,8 @@ class RunFinalizer(CodedTool):
                 elif summary_recipient_error:
                     email_result = {"skipped": True, "reason": summary_recipient_error}
                 else:
-                    subject = str(email_summary.get("subject", "")).strip()
-                    body = str(email_summary.get("body", "")).strip()
+                    subject = _optional_draft(email_summary.get("subject"))
+                    body = _optional_draft(email_summary.get("body"))
                     recipient_results = [
                         _result(
                             GmailSend().invoke(

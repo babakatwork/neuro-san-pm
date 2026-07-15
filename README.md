@@ -330,7 +330,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 85 unit/contract tests;
+- 93 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;

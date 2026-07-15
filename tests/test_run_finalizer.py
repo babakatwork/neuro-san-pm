@@ -2,6 +2,8 @@ import json
 from datetime import datetime
 from datetime import timezone
 
+import pytest
+
 from coded_tools.colleague.colleague_state import ColleagueState
 from coded_tools.colleague.run_finalizer import RunFinalizer
 from coded_tools.colleague.slack_inbox_batch import create_batch
@@ -36,6 +38,30 @@ def test_silent_run_still_checkpoints_board_and_inbox(monkeypatch, tmp_path):
     assert state["board_snapshot"] == snapshot
     assert state["last_slack_ts"] == "20.0"
     assert state["run"] is None
+
+
+@pytest.mark.parametrize("slack_update", [None, "NONE", " none ", "null"])
+def test_null_or_sentinel_slack_update_is_silent(monkeypatch, tmp_path, slack_update):
+    run_id = _begin(monkeypatch, tmp_path)
+
+    def unexpected_post(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("SlackPost must not receive an empty draft")
+
+    monkeypatch.setattr("coded_tools.colleague.run_finalizer.SlackPost.invoke", unexpected_post)
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "board_snapshot": {"digest": "a" * 64},
+                "slack_update": slack_update,
+            },
+            {},
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["slack_update"] == {"skipped": True, "reason": "agent chose no update"}
 
 
 def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, tmp_path):

@@ -38,13 +38,17 @@ class SlackPost(CodedTool):
     def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> str:
         del sly_data
         channel = os.getenv("SLACK_CHANNEL_ID", "").strip()
-        text = str(args.get("text", "")).strip()
-        run_id = str(args.get("run_id", "")).strip()
-        inbox_batch_id = str(args.get("inbox_batch_id", "")).strip()
-        reply_to_ts = str(args.get("reply_to_ts", "")).strip()
+        raw_text = args.get("text")
+        text = raw_text.strip() if isinstance(raw_text, str) else ""
+        run_id = args.get("run_id", "")
+        run_id = run_id.strip() if isinstance(run_id, str) else ""
+        inbox_batch_id = args.get("inbox_batch_id", "")
+        inbox_batch_id = inbox_batch_id.strip() if isinstance(inbox_batch_id, str) else ""
+        reply_to_ts = args.get("reply_to_ts", "")
+        reply_to_ts = reply_to_ts.strip() if isinstance(reply_to_ts, str) else ""
         if not channel:
             return json_result(ok=False, sent=False, error="SLACK_CHANNEL_ID is not configured")
-        if not text:
+        if not text or text.casefold() in {"none", "null"}:
             return json_result(ok=False, sent=False, error="text is required")
         if len(text) > 3500:
             return json_result(ok=False, sent=False, error="text exceeds the 3500 character safety limit")
