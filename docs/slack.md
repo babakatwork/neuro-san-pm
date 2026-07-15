@@ -11,7 +11,9 @@
 6. Copy the bot token to `SLACK_BOT_TOKEN`.
 7. Copy the bot member's stable ID to `SLACK_BOT_USER_ID`.
 8. Copy the stable channel ID to `SLACK_CHANNEL_ID`.
-9. Put only trusted teammate IDs in `SLACK_ALLOWED_USER_IDS`.
+9. Put only trusted teammate IDs who may direct the agent in
+   `SLACK_ALLOWED_USER_IDS`. Other human messages are visible as ambient
+   context but cannot become reply-required requests.
 10. Keep `COLLEAGUE_SLACK_REQUIRE_MENTION=true` unless this is a dedicated DM
     or bot-only channel.
 
@@ -54,14 +56,17 @@ request delivered, so ColleagueState refuses to consume its inbox checkpoint.
 `SlackInbox` calls `conversations.history` with fixed lower/upper timestamps and
 paginates inside host code. On a new state file it starts from
 `COLLEAGUE_SLACK_INITIAL_LOOKBACK_HOURS` (24 hours by default), rather than trying
-to read the channel from its creation date. It drops:
+to read the channel from its creation date. For ambient context, it drops:
 
-- messages from users outside `SLACK_ALLOWED_USER_IDS`;
 - bot messages;
-- channel messages that do not mention `SLACK_BOT_USER_ID` while mention
-  filtering is enabled;
 - malformed timestamps;
 - content from any channel other than `SLACK_CHANNEL_ID`.
+
+The `channel_context` result contains all remaining bounded human messages.
+The separate `messages` result contains only reply-required requests: they must
+come from `SLACK_ALLOWED_USER_IDS` and, while mention filtering is enabled,
+mention `SLACK_BOT_USER_ID`. Ambient context informs product-management
+judgment but is never automatically answered.
 
 The tool creates a body-free inbox batch. If more trusted requests exist than
 the per-run bound, it returns the oldest batch and a partial high-water mark;

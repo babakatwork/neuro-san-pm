@@ -73,9 +73,11 @@ class RunFinalizer(CodedTool):
             if not isinstance(active, dict) or active.get("id") != run_id:
                 return json_result(ok=False, finalized=False, error="run_id does not own the active lease")
 
+            validation_warnings: list[str] = []
             snapshot = args.get("board_snapshot")
             if snapshot is not None and not isinstance(snapshot, dict):
-                return self._finish_with_error(state_tool, run_id, "board_snapshot must be an object")
+                validation_warnings.append("invalid_board_snapshot_ignored")
+                snapshot = None
             digest = str(snapshot.get("digest", "")) if isinstance(snapshot, dict) else ""
             previous = state.get("board_snapshot")
             previous_digest = str(previous.get("digest", "")) if isinstance(previous, dict) else ""
@@ -90,16 +92,18 @@ class RunFinalizer(CodedTool):
                 slack_result = _result(SlackPost().invoke({"run_id": run_id, "text": slack_update}, {}))
 
             replies = args.get("request_replies", [])
+            inbox_checkpoint_allowed = True
             if not isinstance(replies, list):
-                return self._finish_with_error(state_tool, run_id, "request_replies must be an array")
-            inbox_batch_id = str(args.get("inbox_batch_id", "")).strip()
-            checkpoint_ts = str(args.get("checkpoint_ts", "")).strip()
+                validation_warnings.append("invalid_request_replies_ignored")
+                replies = []
+                inbox_checkpoint_allowed = False
+            inbox_batch_id = _text(args.get("inbox_batch_id"))
+            checkpoint_ts = _text(args.get("checkpoint_ts"))
             if bool(inbox_batch_id) != bool(checkpoint_ts):
-                return self._finish_with_error(
-                    state_tool,
-                    run_id,
-                    "inbox_batch_id and checkpoint_ts must be supplied together",
-                )
+                validation_warnings.append("incomplete_inbox_checkpoint_ignored")
+                inbox_batch_id = ""
+                checkpoint_ts = ""
+                inbox_checkpoint_allowed = False
             reply_results: list[dict[str, Any]] = []
             for reply in replies:
                 if not isinstance(reply, dict):
@@ -130,8 +134,9 @@ class RunFinalizer(CodedTool):
             summary_sent_today = _same_utc_day(state.get("last_email_summary_at"), now)
             if email_summary is not None:
                 if not isinstance(email_summary, dict):
-                    return self._finish_with_error(state_tool, run_id, "email_summary must be an object")
-                if not daily_email_pending:
+                    validation_warnings.append("invalid_email_summary_ignored")
+                    email_summary = None
+                elif not daily_email_pending:
                     email_result = {"skipped": True, "reason": "no board change is awaiting a summary"}
                 elif summary_sent_today:
                     email_result = {"skipped": True, "reason": "a daily summary was already sent today"}
@@ -184,7 +189,12 @@ class RunFinalizer(CodedTool):
             board_checkpoint = _result(state_tool.invoke(checkpoint_args, {}))
 
             inbox_checkpoint: dict[str, Any] = {"skipped": True, "reason": "no safe inbox checkpoint"}
-            if inbox_batch_id and checkpoint_ts and all(_delivered(item) for item in reply_results):
+            if (
+                inbox_checkpoint_allowed
+                and inbox_batch_id
+                and checkpoint_ts
+                and all(_delivered(item) for item in reply_results)
+            ):
                 inbox_checkpoint = _result(
                     state_tool.invoke(
                         {
@@ -208,6 +218,7 @@ class RunFinalizer(CodedTool):
                 email_summary_delivered=_summary_delivered(email_result),
                 reply_count=len(reply_results),
                 inbox_advanced=bool(inbox_checkpoint.get("ok")),
+                validation_warnings=validation_warnings,
             )
             return json_result(
                 ok=ok,
@@ -218,6 +229,7 @@ class RunFinalizer(CodedTool):
                 email_summary=email_result,
                 board_checkpoint=board_checkpoint,
                 inbox_checkpoint=inbox_checkpoint,
+                validation_warnings=validation_warnings,
             )
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             return self._finish_with_error(state_tool, run_id, f"finalization failed: {type(exc).__name__}")

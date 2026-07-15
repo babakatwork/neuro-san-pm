@@ -6,9 +6,10 @@ to tune `registries/product_colleague.hocon` into a useful member of the team.
 ## What the colleague does
 
 The colleague runs on the native Neuro SAN periodic schedule, every 15 minutes
-by default. Each run reads eligible Slack requests, inspects the configured
-GitHub Project, compares the current deterministic snapshot with durable state,
-and decides whether the team needs an update.
+by default. Each run reads bounded ambient Slack context plus eligible directed
+requests, inspects the configured GitHub Project, compares the current
+deterministic snapshot with durable state, and decides whether the team needs an
+update.
 
 The colleague has discretion. Useful reasons to speak include:
 
@@ -43,8 +44,11 @@ make slack-bridge
 ```
 
 Without the bridge, eligible Slack requests are still discovered by the next
-periodic run. With `COLLEAGUE_SLACK_REQUIRE_MENTION=true`, channel requests must
-mention the bot. The channel and allowed users are fixed by host configuration.
+periodic run. All bounded human messages in the configured channel are visible
+as ambient context. With `COLLEAGUE_SLACK_REQUIRE_MENTION=true`, only allowlisted
+messages mentioning the bot are reply-required requests. The bridge wakes the
+agent for those directed requests; ambient conversation waits for the periodic
+scan.
 
 ## Example scenarios
 

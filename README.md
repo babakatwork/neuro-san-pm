@@ -22,7 +22,8 @@ and audit records never contain tokens or message bodies.
   selected by the model; it reads and digests the full board inside Python.
 - Compact deterministic change state: aggregate counts and bounded attention
   items reach the LLM, while all cards still contribute to the digest.
-- Slack inbox and outbound tools constrained to one channel and explicit users.
+- Slack inbox context constrained to one channel; explicit users and mentions
+  determine which messages are reply-required requests.
 - Optional Gmail search/read plus allowlisted, lease-bound sending that is off by default.
 - A Socket Mode bridge that sends a body-free wake signal for an allowlisted
   Slack mention or DM; the network then reads the durable inbox itself.
@@ -261,9 +262,12 @@ COLLEAGUE_SLACK_REQUIRE_MENTION=true
 COLLEAGUE_SLACK_WRITE_ENABLED=true
 ```
 
-`SLACK_ALLOWED_USER_IDS` is the comma-separated allowlist of teammates who
-may direct the colleague. Keep mention filtering enabled unless the configured
-conversation is a dedicated DM or bot-only channel.
+`SLACK_ALLOWED_USER_IDS` is the comma-separated allowlist of teammates who may
+direct the colleague. The periodic inbox reads all bounded human messages in
+the fixed channel as ambient context, including messages from other users, but
+only allowlisted messages satisfying the mention policy require replies. Keep
+mention filtering enabled unless the configured conversation is a dedicated DM
+or bot-only channel.
 
 ### Run and verify the bridge
 
@@ -283,8 +287,10 @@ make slack-bridge
 The bridge should log `Starting Slack bridge for one allowlisted channel`.
 Mention `@Colleague` in the configured channel from an allowlisted account.
 The bridge queues body-free event metadata and wakes the server; the agent then
-reads the actual message through its bounded Slack inbox and replies in the
-message thread. Inspect `.state/audit.jsonl` for `slack_inbox`,
+reads the actual directed message plus bounded channel context through its
+Slack inbox and replies in the message thread. Ambient top-level channel
+messages are picked up by periodic scans without causing immediate wake-ups or
+mandatory replies. Inspect `.state/audit.jsonl` for `slack_inbox`,
 `slack_post`, and run lifecycle events if no reply appears.
 
 The bridge forwards a top-level Neuro SAN `ChatRequest` with a `MINIMAL` chat
@@ -389,7 +395,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 96 unit/contract tests;
+- 99 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;

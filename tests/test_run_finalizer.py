@@ -179,3 +179,93 @@ def test_second_change_same_day_remains_pending_without_second_email(monkeypatch
     assert result["email_summary"]["reason"] == "a daily summary was already sent today"
     state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
     assert state["daily_email_pending"] is True
+
+
+def test_malformed_optional_inputs_do_not_block_email_or_checkpoint(monkeypatch, tmp_path):
+    first_run = _begin(monkeypatch, tmp_path)
+    state_tool = ColleagueState()
+    state_tool.invoke(
+        {"action": "checkpoint", "run_id": first_run, "board_snapshot": {"digest": "a" * 64}},
+        {},
+    )
+    state_tool.invoke({"action": "finish", "run_id": first_run}, {})
+    run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com")
+    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setattr(
+        "coded_tools.colleague.run_finalizer.GmailSend.invoke",
+        lambda self, args, sly_data: json.dumps({"ok": True, "sent": True, "message_id": "mail-1"}),
+    )
+
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "board_snapshot": {"digest": "b" * 64},
+                "request_replies": "not-an-array",
+                "checkpoint_ts": "30.0",
+                "email_summary": {"subject": "Daily summary", "body": "Changed."},
+            },
+            {},
+        )
+    )
+
+    state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
+    assert result["ok"] is True
+    assert result["email_summary"]["delivered"] is True
+    assert result["validation_warnings"] == [
+        "invalid_request_replies_ignored",
+        "incomplete_inbox_checkpoint_ignored",
+    ]
+    assert result["inbox_checkpoint"]["skipped"] is True
+    assert state["board_snapshot"]["digest"] == "b" * 64
+    assert state["last_email_summary_at"]
+    assert state["run"] is None
+
+
+def test_malformed_optional_drafts_are_ignored_and_lease_is_released(monkeypatch, tmp_path):
+    run_id = _begin(monkeypatch, tmp_path)
+
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "board_snapshot": "not-an-object",
+                "email_summary": "not-an-object",
+            },
+            {},
+        )
+    )
+
+    state = json.loads(ColleagueState().invoke({"action": "read"}, {}))["state"]
+    assert result["ok"] is True
+    assert result["email_summary"] == {"skipped": True, "reason": "agent chose no summary"}
+    assert result["validation_warnings"] == [
+        "invalid_board_snapshot_ignored",
+        "invalid_email_summary_ignored",
+    ]
+    assert state["run"] is None
+
+
+def test_malformed_replies_never_advance_a_valid_inbox_checkpoint(monkeypatch, tmp_path):
+    run_id = _begin(monkeypatch, tmp_path)
+    batch_id = create_batch(run_id, "40.0", [])
+
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "request_replies": "not-an-array",
+                "inbox_batch_id": batch_id,
+                "checkpoint_ts": "40.0",
+            },
+            {},
+        )
+    )
+
+    state = json.loads(ColleagueState().invoke({"action": "read"}, {}))["state"]
+    assert result["ok"] is True
+    assert result["inbox_checkpoint"]["skipped"] is True
+    assert result["validation_warnings"] == ["invalid_request_replies_ignored"]
+    assert state["last_slack_ts"] == "0"
+    assert state["run"] is None

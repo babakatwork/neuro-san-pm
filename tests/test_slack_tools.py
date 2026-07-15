@@ -62,6 +62,18 @@ def test_slack_inbox_paginates_filters_mentions_and_returns_scanned_high_water(m
     result = json.loads(SlackInbox().invoke({"oldest": "1.0", "run_id": run_id}, {}))
 
     assert [message["text"] for message in result["messages"]] == ["first", "second"]
+    assert [message["text"] for message in result["channel_context"]] == [
+        "first",
+        "ambient conversation",
+        "second",
+        "not allowed",
+    ]
+    assert [message["directed_to_colleague"] for message in result["channel_context"]] == [
+        True,
+        False,
+        True,
+        False,
+    ]
     assert float(result["checkpoint_ts"]) > 6.0
     assert result["scanned_count"] == 4
     assert result["complete"] is True
