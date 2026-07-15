@@ -18,6 +18,6 @@ RUN mkdir -p /data && chown colleague:colleague /data
 
 USER colleague
 
-EXPOSE 8080
+EXPOSE 8188
 
 CMD ["python", "-m", "scripts.start_server"]

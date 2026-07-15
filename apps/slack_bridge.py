@@ -61,7 +61,7 @@ def build_event_payload(event: dict[str, Any]) -> dict[str, Any]:
 
 def dispatch_event(event: dict[str, Any]) -> None:
     """Send an allowlisted Slack event to the Neuro SAN HTTP service."""
-    base_url = os.getenv("NEURO_SAN_BASE_URL", "http://localhost:8080").rstrip("/")
+    base_url = os.getenv("NEURO_SAN_BASE_URL", "http://localhost:8188").rstrip("/")
     network = os.getenv("COLLEAGUE_NETWORK_NAME", "product_colleague").strip()
     endpoint = f"{base_url}/api/v1/{network}/streaming_chat"
     response = requests.post(endpoint, json=build_event_payload(event), timeout=15)

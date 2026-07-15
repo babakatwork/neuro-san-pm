@@ -34,20 +34,50 @@ and audit records never contain tokens or message bodies.
 - An optional, unserved Playwright computer-use network with observation-only
   tools.
 
+## Agent network schematic
+
 ```mermaid
-flowchart LR
-    Cron["Neuro SAN PeriodicEventInitiator"] --> Event["ProductColleague (event)"]
-    SlackEvent["Allowlisted Slack event"] --> Bridge["Socket Mode bridge"] --> Event
-    Event --> Gate["Acquire lease + context"]
-    Event --> Inbox["Slack inbox"]
-    Event --> Analyst["KanbanAnalyst"]
-    Analyst --> Snapshot["Host-side GitHub read + compact snapshot"]
-    Event --> Finalizer["Host-side finalizer"]
-    Finalizer --> Post["Fixed-channel Slack post"]
-    Finalizer --> Checkpoint["Checkpoint + release"]
-    Finalizer --> Gmail["Optional daily email summary"]
-    Event --> GmailAssistant["Optional scoped Gmail assistant"]
+flowchart TB
+    Cron["Periodic scheduler"] --> Colleague
+    Slack["Allowlisted Slack mention or DM"] --> Bridge["Socket Mode bridge"] --> Colleague
+    Manual["make trigger"] --> Colleague
+
+    subgraph Network["product_colleague agent network"]
+        Colleague["ProductColleague<br/>coordinator"]
+        Analyst["KanbanAnalyst<br/>board interpretation"]
+        Advisor["ProductManagerAdvisor<br/>PM judgment and drafting"]
+        GmailAgent["GmailAssistant<br/>scoped mail tasks"]
+
+        Colleague --> Analyst
+        Colleague --> Advisor
+        Colleague --> GmailAgent
+    end
+
+    subgraph Boundaries["Deterministic host-owned boundaries"]
+        Runtime["RuntimeConfig + ColleagueState<br/>policy, lease, and context"]
+        Inbox["SlackInbox<br/>bounded trusted requests"]
+        Snapshot["GitHubKanbanSnapshot<br/>read-only board digest"]
+        GmailTools["Gmail search, read, and gated send"]
+        Finalizer["RunFinalizer<br/>delivery and checkpoint"]
+        SlackPost["SlackPost<br/>fixed channel or thread"]
+        DailyMail["Optional daily email fan-out"]
+        State["Checkpoint + lease release"]
+    end
+
+    Colleague --> Runtime
+    Colleague --> Inbox
+    Analyst --> Snapshot
+    GmailAgent --> GmailTools
+    Colleague --> Finalizer
+    Finalizer --> SlackPost
+    Finalizer --> DailyMail
+    Finalizer --> State
 ```
+
+The coordinator delegates board analysis, product-management judgment, and
+optional mail work to smaller scoped agents. Credentials, resource selection,
+outbound delivery, deduplication, and durable state remain in deterministic
+host tools rather than model-controlled code.
 
 The native scheduler discards a periodic agent's final response. That is why
 the network performs its Slack/checkpoint side effects itself.
@@ -104,6 +134,30 @@ COLLEAGUE_SLACK_WRITE_ENABLED=true
 ```
 
 Restart the service after changing `.env` or the cron schedule.
+
+## Dedicated port
+
+All Make targets use port `8188` by default, keeping this project clear of
+Neuro SAN's default port `8080`. The server, manual trigger, Slack bridge, and
+Compose stack receive the same port automatically.
+
+To use a different dedicated port for the whole shell session:
+
+```bash
+export NEURO_SAN_PM_HTTP_PORT=8288
+make run
+```
+
+Then run `make trigger` and `make slack-bridge` in terminals with the same
+export. For a one-off command, pass the Make variable explicitly, for example:
+
+```bash
+make NEURO_SAN_PM_HTTP_PORT=8288 run
+```
+
+Use that same override with `trigger`, `slack-bridge`, `up`, and `down`. Ports
+below `1024`, above `65535`, and the reserved default `8080` are rejected by
+the configuration check.
 
 The agent decides whether an unsolicited Slack update is useful. It receives a
 strong suggestion to introduce itself before its first post and another cadence
@@ -219,8 +273,8 @@ Start the validated Neuro SAN server in one terminal:
 make run
 ```
 
-After the server is listening on port 8080, start Socket Mode in a second
-terminal:
+After the server is listening on this project's port 8188, start Socket Mode in
+a second terminal:
 
 ```bash
 make slack-bridge
@@ -309,6 +363,11 @@ network.
 
 ## Important runtime behavior
 
+- The Makefile keeps this project off Neuro SAN's default port 8080. It exports
+  port 8188 consistently to the server, trigger client, Slack bridge, and
+  Compose stack. To choose another dedicated port for one invocation, use
+  `make NEURO_SAN_PM_HTTP_PORT=8288 run` (and use the same override for
+  `trigger`, `slack-bridge`, `up`, and `down`).
 - Cron uses the server's local timezone.
 - Missed firings during downtime are skipped; there is no catch-up queue.
 - Schedule edits currently require a restart.
@@ -330,7 +389,7 @@ network.
 
 The project is verified against the exact released pins:
 
-- 93 unit/contract tests;
+- 96 unit/contract tests;
 - Ruff lint;
 - `pip check`;
 - the neuro-san 0.6.76 HOCON validator;

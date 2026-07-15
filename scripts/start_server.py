@@ -10,6 +10,8 @@ from scripts.check_config import main as check_config
 from scripts.slack_availability import set_availability
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SERVER_PORT = 8188
+NEURO_SAN_DEFAULT_PORT = 8080
 
 
 def configure_core_environment() -> None:
@@ -31,13 +33,15 @@ def configure_core_environment() -> None:
 
 def server_command() -> list[str]:
     """Return the exact single-worker server command after validating its port."""
-    raw_port = os.getenv("NEURO_SAN_SERVER_HTTP_PORT", "8080")
+    raw_port = os.getenv("NEURO_SAN_SERVER_HTTP_PORT", str(DEFAULT_SERVER_PORT))
     try:
         port = int(raw_port)
     except ValueError as exc:
         raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be an integer") from exc
-    if port != 8080:
-        raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be 8080 for this deployment contract")
+    if not 1024 <= port <= 65535:
+        raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must be between 1024 and 65535")
+    if port == NEURO_SAN_DEFAULT_PORT:
+        raise ValueError("NEURO_SAN_SERVER_HTTP_PORT must not use Neuro SAN's default port 8080")
     return [
         sys.executable,
         "-m",

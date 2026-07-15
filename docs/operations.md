@@ -15,8 +15,10 @@ The container launcher runs `scripts/check_config.py` before replacing itself
 with the Neuro SAN process. Missing credentials, unsafe boolean typos, request
 logging, worker-count, timeout, schedule, or registry errors therefore cause a
 fail-closed restart instead of a silently ineffective scheduler.
-The sample also fixes the internal HTTP port at 8080 so the health check and
-Slack bridge cannot drift from the server listener.
+The Makefile defaults this project to internal HTTP port 8188 instead of Neuro
+SAN's default 8080 and exports that choice to the server, health check, trigger
+client, Slack bridge, and Compose stack. Override all Make targets consistently
+with `make NEURO_SAN_PM_HTTP_PORT=8288 <target>`.
 
 `make run` posts a fixed online notice to the configured Slack channel after
 configuration validation succeeds. Use `make down` for a planned pause: it

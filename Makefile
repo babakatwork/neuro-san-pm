@@ -1,3 +1,8 @@
+NEURO_SAN_PM_HTTP_PORT ?= 8188
+export NEURO_SAN_PM_HTTP_PORT
+export NEURO_SAN_SERVER_HTTP_PORT := $(NEURO_SAN_PM_HTTP_PORT)
+export NEURO_SAN_BASE_URL := http://localhost:$(NEURO_SAN_PM_HTTP_PORT)
+
 .PHONY: setup check test lint validate run trigger slack-bridge up down
 
 setup:

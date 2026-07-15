@@ -27,7 +27,7 @@ def main() -> None:
         default="Manual product-management heartbeat: inspect the board and notify Slack only if useful.",
     )
     args = parser.parse_args()
-    base_url = os.getenv("NEURO_SAN_BASE_URL", "http://localhost:8080").rstrip("/")
+    base_url = os.getenv("NEURO_SAN_BASE_URL", "http://localhost:8188").rstrip("/")
     endpoint = f"{base_url}/api/v1/product_colleague/streaming_chat"
     response = requests.post(endpoint, json=build_payload(args.text), timeout=15)
     response.raise_for_status()

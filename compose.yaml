@@ -38,10 +38,10 @@ services:
       AGENT_REQUEST_LOGGING_INPUT_SLICE: "0"
       COLLEAGUE_STATE_PATH: /data/colleague.json
       COLLEAGUE_AUDIT_PATH: /data/audit.jsonl
-      NEURO_SAN_BASE_URL: http://localhost:8080
-      NEURO_SAN_SERVER_HTTP_PORT: "8080"
+      NEURO_SAN_BASE_URL: http://localhost:${NEURO_SAN_PM_HTTP_PORT:-8188}
+      NEURO_SAN_SERVER_HTTP_PORT: "${NEURO_SAN_PM_HTTP_PORT:-8188}"
     expose:
-      - "8080"
+      - "${NEURO_SAN_PM_HTTP_PORT:-8188}"
     volumes:
       - colleague-state:/data
       - ./.secrets:/run/colleague-secrets:ro
@@ -50,7 +50,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/list', timeout=5)"
+        - "import os, urllib.request; port = os.environ['NEURO_SAN_SERVER_HTTP_PORT']; urllib.request.urlopen(f'http://localhost:{port}/api/v1/list', timeout=5)"
       interval: 30s
       timeout: 10s
       retries: 5
@@ -69,7 +69,7 @@ services:
       SLACK_ALLOWED_USER_IDS: ${SLACK_ALLOWED_USER_IDS:-}
       COLLEAGUE_SLACK_REQUIRE_MENTION: ${COLLEAGUE_SLACK_REQUIRE_MENTION:-true}
       COLLEAGUE_STATE_PATH: /data/colleague.json
-      NEURO_SAN_BASE_URL: http://neuro-san:8080
+      NEURO_SAN_BASE_URL: http://neuro-san:${NEURO_SAN_PM_HTTP_PORT:-8188}
     command: ["python", "-m", "apps.slack_bridge"]
     volumes:
       - colleague-state:/data

@@ -85,8 +85,14 @@ def main() -> int:
         errors.append("GITHUB_PROJECT_NUMBER must be a positive integer")
     if os.getenv("AGENT_HTTP_SERVER_INSTANCES", "1") != "1":
         errors.append("AGENT_HTTP_SERVER_INSTANCES must be 1 to avoid duplicate schedulers")
-    if os.getenv("NEURO_SAN_SERVER_HTTP_PORT", "8080") != "8080":
-        errors.append("NEURO_SAN_SERVER_HTTP_PORT must be 8080 for this deployment contract")
+    try:
+        server_port = int(os.getenv("NEURO_SAN_SERVER_HTTP_PORT", "8188"))
+        if not 1024 <= server_port <= 65535:
+            raise ValueError
+        if server_port == 8080:
+            errors.append("NEURO_SAN_SERVER_HTTP_PORT must not use Neuro SAN's default port 8080")
+    except ValueError:
+        errors.append("NEURO_SAN_SERVER_HTTP_PORT must be between 1024 and 65535")
     if os.getenv("AGENT_REQUEST_LOGGING_INPUT_SLICE") != "0":
         errors.append("AGENT_REQUEST_LOGGING_INPUT_SLICE must be 0 to redact request text")
 

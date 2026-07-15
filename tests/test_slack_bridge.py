@@ -1,5 +1,6 @@
 from apps.slack_bridge import build_event_payload
 from apps.slack_bridge import claim_event
+from apps.slack_bridge import dispatch_event
 from apps.slack_bridge import is_allowed_event
 from apps.slack_bridge import release_event
 
@@ -39,3 +40,22 @@ def test_bridge_event_dedupe_is_durable_and_releasable(monkeypatch, tmp_path):
     release_event("Ev123")
     assert claim_event("Ev123", event) is True
     assert claim_event("", event) is False
+
+
+def test_bridge_defaults_to_project_port_8188(monkeypatch):
+    monkeypatch.delenv("NEURO_SAN_BASE_URL", raising=False)
+    calls = []
+
+    class Response:
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    def post(url, *, json, timeout):
+        calls.append((url, json, timeout))
+        return Response()
+
+    monkeypatch.setattr("apps.slack_bridge.requests.post", post)
+    dispatch_event({"channel": "C1", "user": "U1", "ts": "12.34"})
+
+    assert calls[0][0] == "http://localhost:8188/api/v1/product_colleague/streaming_chat"
