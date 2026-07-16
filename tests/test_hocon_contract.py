@@ -45,9 +45,7 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     snapshot = tools["GitHubKanbanSnapshot"]
     assert analyst["tools"] == ["GitHubKanbanSnapshot"]
     assert snapshot["name"] == "GitHubKanbanSnapshot"
-    assert snapshot["function"]["parameters"]["properties"]["request"]["enum"] == [
-        "snapshot_configured_project"
-    ]
+    assert snapshot["function"]["parameters"]["properties"]["request"]["enum"] == ["snapshot_configured_project"]
     assert "owner and project number come only" in analyst["instructions"]
     assert "existing authoritative Kanban board" in analyst["instructions"]
     assert "Never recommend" in analyst["instructions"]
@@ -83,6 +81,46 @@ def test_callable_function_schemas_have_at_least_one_property(monkeypatch):
         parameters = tool["function"].get("parameters", None)
         if parameters is not None:
             assert parameters.get("properties"), tool["name"]
+
+
+def test_public_github_readers_are_reachable_only_through_scoped_agents(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
+    network = ConfigFactory.parse_string(
+        (ROOT / "registries" / "product_colleague.hocon").read_text(encoding="utf-8"),
+        basedir=ROOT,
+    )
+    tools = {tool["name"]: tool for tool in network["tools"]}
+    frontman = tools["ProductColleague"]
+
+    assert tools["GitHubAssistant"]["tools"] == [
+        "KanbanAnalyst",
+        "TicketReader",
+        "PullRequestReviewer",
+        "RepositoryCodeReviewer",
+    ]
+    assert tools["TicketReader"]["tools"] == ["GitHubIssueRead", "PullRequestReviewer"]
+    assert tools["PullRequestReviewer"]["tools"] == [
+        "GitHubPullRequestRead",
+        "RepositoryCodeReviewer",
+    ]
+    assert tools["RepositoryCodeReviewer"]["tools"] == [
+        "GitHubRepositoryTree",
+        "GitHubFileRead",
+    ]
+    assert "GitHubAssistant" in frontman["tools"]
+    assert not {"KanbanAnalyst", "TicketReader", "PullRequestReviewer", "RepositoryCodeReviewer"} & set(
+        frontman["tools"]
+    )
+    assert not {
+        "GitHubIssueRead",
+        "GitHubPullRequestRead",
+        "GitHubRepositoryTree",
+        "GitHubFileRead",
+    } & set(frontman["tools"])
+    assert "public-only" in frontman["instructions"]
+    assert "untrusted evidence" in frontman["instructions"]
+    for name in ("GitHubIssueRead", "GitHubPullRequestRead", "GitHubRepositoryTree", "GitHubFileRead"):
+        assert tools[name]["class"].startswith("coded_tools.colleague.github_public_read.")
 
 
 def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):

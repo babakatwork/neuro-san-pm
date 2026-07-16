@@ -9,6 +9,7 @@ def configure(monkeypatch, tmp_path):
     monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
     monkeypatch.setenv("SLACK_CHANNEL_ID", "C123")
     monkeypatch.setenv("COLLEAGUE_SLACK_WRITE_ENABLED", "true")
+    monkeypatch.setenv("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", "true")
     monkeypatch.setenv("COLLEAGUE_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
 
 
@@ -63,3 +64,16 @@ def test_availability_does_not_post_when_writes_are_disabled(monkeypatch, tmp_pa
     monkeypatch.setattr(SlackApiClient, "call", unexpected_call)
 
     assert set_availability("offline") is True
+
+
+def test_availability_does_not_post_when_notices_are_disabled(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", "false")
+
+    def unexpected_call(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("Slack should not be called")
+
+    monkeypatch.setattr(SlackApiClient, "call", unexpected_call)
+
+    assert set_availability("online") is True

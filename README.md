@@ -20,6 +20,8 @@ and audit records never contain tokens or message bodies.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
 - A host-scoped GitHub Project snapshot tool whose owner/project cannot be
   selected by the model; it reads and digests the full board inside Python.
+- A `GitHubAssistant` coordinator over scoped Kanban, ticket, PR, and source
+  specialists backed by bounded readers for allowlisted public repositories.
 - Compact deterministic change state: aggregate counts and bounded attention
   items reach the LLM, while all cards still contribute to the digest.
 - Slack inbox context constrained to one channel; explicit users and mentions
@@ -29,8 +31,8 @@ and audit records never contain tokens or message bodies.
   Slack mention or DM; the network then reads the durable inbox itself.
 - Durable state, run leasing, exact-message deduplication, request-level
   at-most-once Slack replies, and secret-free audit logging.
-- Fixed Slack availability notices when the service starts or is deliberately
-  stopped.
+- Optional fixed Slack availability notices when the service starts or is
+  deliberately stopped, independently disabled by default.
 - Docker Compose deployment with one scheduler worker and persistent state.
 - An optional, unserved Playwright computer-use network with observation-only
   tools.
@@ -45,11 +47,21 @@ flowchart TB
 
     subgraph Network["product_colleague agent network"]
         Colleague["ProductColleague<br/>coordinator"]
+        GitHub["GitHubAssistant<br/>GitHub routing and synthesis"]
         Analyst["KanbanAnalyst<br/>board interpretation"]
+        Ticket["TicketReader<br/>issue body and product context"]
+        PR["PullRequestReviewer<br/>PR and patch review"]
+        Code["RepositoryCodeReviewer<br/>focused source inspection"]
         Advisor["ProductManagerAdvisor<br/>PM judgment and drafting"]
         GmailAgent["GmailAssistant<br/>scoped mail tasks"]
 
-        Colleague --> Analyst
+        Colleague --> GitHub
+        GitHub --> Analyst
+        GitHub --> Ticket
+        GitHub --> PR
+        GitHub --> Code
+        Ticket --> PR
+        PR --> Code
         Colleague --> Advisor
         Colleague --> GmailAgent
     end
@@ -58,6 +70,7 @@ flowchart TB
         Runtime["RuntimeConfig + ColleagueState<br/>policy, lease, and context"]
         Inbox["SlackInbox<br/>bounded trusted requests"]
         Snapshot["GitHubKanbanSnapshot<br/>read-only board digest"]
+        GitHubRead["Public GitHub REST readers<br/>issue, PR, tree, and file"]
         GmailTools["Gmail search, read, and gated send"]
         Finalizer["RunFinalizer<br/>delivery and checkpoint"]
         SlackPost["SlackPost<br/>fixed channel or thread"]
@@ -68,6 +81,9 @@ flowchart TB
     Colleague --> Runtime
     Colleague --> Inbox
     Analyst --> Snapshot
+    Ticket --> GitHubRead
+    PR --> GitHubRead
+    Code --> GitHubRead
     GmailAgent --> GmailTools
     Colleague --> Finalizer
     Finalizer --> SlackPost
@@ -75,10 +91,11 @@ flowchart TB
     Finalizer --> State
 ```
 
-The coordinator delegates board analysis, product-management judgment, and
-optional mail work to smaller scoped agents. Credentials, resource selection,
-outbound delivery, deduplication, and durable state remain in deterministic
-host tools rather than model-controlled code.
+The top coordinator delegates all GitHub work through `GitHubAssistant`, which
+routes to smaller board, ticket, PR, and source specialists. Product-management
+judgment and optional mail work remain separate. Credentials, resource
+selection, outbound delivery, deduplication, and durable state remain in
+deterministic host tools rather than model-controlled code.
 
 The native scheduler discards a periodic agent's final response. That is why
 the network performs its Slack/checkpoint side effects itself.
@@ -97,6 +114,8 @@ Fill in `.env`:
 - `OPENAI_API_KEY`
 - `GITHUB_TOKEN`
 - `GITHUB_PROJECT_OWNER` and `GITHUB_PROJECT_NUMBER`
+- `GITHUB_READ_ALLOWED_REPOSITORIES` when public repositories beyond the
+  default `neuro-san` and `neuro-san-studio` pair are needed
 - `SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_CHANNEL_ID`, and
   `SLACK_ALLOWED_USER_IDS`
 - `SLACK_APP_TOKEN` only if using the inbound Socket Mode bridge
@@ -113,8 +132,9 @@ Start only the persistent Neuro SAN server:
 make run
 ```
 
-After validation succeeds, `make run` posts a fixed online notice when
-`COLLEAGUE_SLACK_WRITE_ENABLED=true`. To receive Slack mentions immediately
+After validation succeeds, `make run` posts a fixed online notice only when
+both `COLLEAGUE_SLACK_WRITE_ENABLED=true` and
+`COLLEAGUE_SLACK_AVAILABILITY_ENABLED=true`. To receive Slack mentions immediately
 instead of waiting for the next scheduled scan, also start the Socket Mode
 bridge in another terminal as described under [Slack setup](#slack-setup).
 
@@ -204,7 +224,7 @@ URL—not a repository number. Use a dedicated token with:
 
 - `read:project` for Projects v2;
 - `read:org` if the organization requires it;
-- read-only repository access for private issue/PR details, if needed.
+- read-only repository access for the public issue/PR/source details used here.
 
 The sample agent does not receive raw GitHub MCP tools. Its coded snapshot tool
 has no resource-selection arguments and reads only `GITHUB_PROJECT_OWNER` plus
@@ -212,6 +232,21 @@ has no resource-selection arguments and reads only `GITHUB_PROJECT_OWNER` plus
 different project or repository. It uses a constant GraphQL query, computes a
 digest over every normalized item inside the host, and returns only aggregate
 counts plus bounded attention items to the LLM; no mutation exists.
+
+Ticket, PR, and code inspection use a separate explicit public-repository
+allowlist. The defaults are:
+
+```dotenv
+GITHUB_READ_ALLOWED_REPOSITORIES=cognizant-ai-lab/neuro-san,cognizant-ai-lab/neuro-san-studio
+```
+
+Add related public repositories as comma-separated `owner/repository` names.
+Every request must match this list, and the tool independently checks that
+GitHub reports `private=false` before returning issue bodies, PR patches, trees,
+or files. Reads are bounded: one issue or PR at a time, at most 100 changed
+files, a 5,000-entry tree, and 100 KB per text file. These agents are available
+for directed questions and concrete PM decisions; normal periodic board checks
+do not automatically scan source repositories.
 
 [`mcp/mcp_info.hocon`](mcp/mcp_info.hocon) also records explicit hosted
 `/projects/readonly`, `/issues/readonly`, and `/pull_requests/readonly`
@@ -260,6 +295,7 @@ SLACK_CHANNEL_ID=C...
 SLACK_ALLOWED_USER_IDS=U123...,U456...
 COLLEAGUE_SLACK_REQUIRE_MENTION=true
 COLLEAGUE_SLACK_WRITE_ENABLED=true
+COLLEAGUE_SLACK_AVAILABILITY_ENABLED=false
 ```
 
 `SLACK_ALLOWED_USER_IDS` is the comma-separated allowlist of teammates who may
@@ -309,9 +345,10 @@ For a planned pause, stop foreground local processes with Ctrl-C and run:
 make down
 ```
 
-`make down` posts a fixed offline notice and stops the Compose services.
-Slack notices are best effort and do not block startup or shutdown. The next
-`make run` or `make up` posts the online notice again.
+`make down` stops the Compose services. When availability notices and Slack
+writes are both enabled, it first posts a fixed offline notice; the next
+`make run` or `make up` posts the online notice. Notices are best effort and do
+not block startup or shutdown.
 
 See [Slack setup and behavior](docs/slack.md) for the complete checklist. Before
 enabling live posting, read [first run and product-manager
@@ -328,8 +365,8 @@ make up
 docker compose logs -f neuro-san slack-bridge
 ```
 
-Use `make down` for a planned shutdown so Slack receives the offline notice
-before Compose removes the services.
+Use `make down` for a planned shutdown. Slack receives the offline notice before
+Compose removes the services only when availability notices are enabled.
 
 The permanent Compose deployment does not publish the Neuro SAN HTTP port to
 the host. `public=false` controls discovery, not endpoint authentication. If
@@ -411,7 +448,7 @@ are intentionally absent from the project.
 
 ```text
 apps/slack_bridge.py                 Slack event -> Neuro SAN event bridge
-coded_tools/colleague/               state, Slack, config, and snapshot tools
+coded_tools/colleague/               state, Slack, config, and bounded GitHub readers
 config/                              shared model configuration
 mcp/mcp_info.hocon                   future read-only MCP building blocks
 registries/product_colleague.hocon   sample agent network

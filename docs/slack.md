@@ -51,6 +51,12 @@ mass mention or attacker-controlled preview. Outbound delivery is disabled
 unless `COLLEAGUE_SLACK_WRITE_ENABLED=true`. A dry-run preview does not mark a
 request delivered, so ColleagueState refuses to consume its inbox checkpoint.
 
+Fixed lifecycle notices are separately gated by
+`COLLEAGUE_SLACK_AVAILABILITY_ENABLED`, which defaults to `false`. Leave it
+disabled to run `make run`, `make up`, and `make down` without online/offline
+channel posts while retaining ordinary agent updates and replies. Set both this
+flag and `COLLEAGUE_SLACK_WRITE_ENABLED=true` to enable lifecycle notices.
+
 ## Inbox behavior
 
 `SlackInbox` calls `conversations.history` with fixed lower/upper timestamps and

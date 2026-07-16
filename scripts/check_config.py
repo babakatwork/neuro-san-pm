@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from coded_tools.colleague.github_public_read import GitHubReadError  # noqa: E402
+from coded_tools.colleague.github_public_read import allowed_repository_names  # noqa: E402
 from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients  # noqa: E402
 
 TRUE_ENV_VALUES = frozenset({"1", "true", "t", "yes", "y", "on"})
@@ -83,6 +85,10 @@ def main() -> int:
             raise ValueError
     except ValueError:
         errors.append("GITHUB_PROJECT_NUMBER must be a positive integer")
+    try:
+        allowed_repository_names()
+    except GitHubReadError as exc:
+        errors.append(exc.message)
     if os.getenv("AGENT_HTTP_SERVER_INSTANCES", "1") != "1":
         errors.append("AGENT_HTTP_SERVER_INSTANCES must be 1 to avoid duplicate schedulers")
     try:
@@ -97,8 +103,9 @@ def main() -> int:
         errors.append("AGENT_REQUEST_LOGGING_INPUT_SLICE must be 0 to redact request text")
 
     write_enabled, write_error = read_env_bool("COLLEAGUE_SLACK_WRITE_ENABLED", False)
+    _, availability_error = read_env_bool("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", False)
     _, mention_error = read_env_bool("COLLEAGUE_SLACK_REQUIRE_MENTION", True)
-    errors.extend(error for error in (write_error, mention_error) if error)
+    errors.extend(error for error in (write_error, availability_error, mention_error) if error)
 
     cron = os.getenv("COLLEAGUE_CRON_SCHEDULE", "*/15 * * * *")
     max_run, max_run_error = read_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)

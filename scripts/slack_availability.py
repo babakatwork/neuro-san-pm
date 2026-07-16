@@ -25,6 +25,9 @@ def set_availability(status: str) -> bool:
     if status not in STATUSES:
         print("ERROR: availability must be online or offline")
         return False
+    if not env_bool("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", False):
+        print(f"Slack availability notice skipped ({status} requested; notices are disabled).")
+        return True
     if not env_bool("COLLEAGUE_SLACK_WRITE_ENABLED", False):
         print(f"Slack availability unchanged ({status} requested; Slack writes are disabled).")
         return True

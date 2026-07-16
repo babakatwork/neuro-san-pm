@@ -11,6 +11,8 @@ from neuro_san.interfaces.coded_tool import CodedTool
 
 from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague._runtime import read_env_bool
+from coded_tools.colleague.github_public_read import GitHubReadError
+from coded_tools.colleague.github_public_read import allowed_repository_names
 from coded_tools.colleague.gmail_recipients import parse_email_list
 from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients
 
@@ -27,6 +29,12 @@ class RuntimeConfig(CodedTool):
         allowed_users = sorted(
             user.strip() for user in os.getenv("SLACK_ALLOWED_USER_IDS", "").split(",") if user.strip()
         )
+        try:
+            public_repositories = allowed_repository_names()
+            repository_allowlist_error = None
+        except GitHubReadError as exc:
+            public_repositories = []
+            repository_allowlist_error = exc.message
 
         missing: list[str] = []
         for name in ("GITHUB_TOKEN", "GITHUB_PROJECT_OWNER", "GITHUB_PROJECT_NUMBER"):
@@ -56,6 +64,9 @@ class RuntimeConfig(CodedTool):
         ]
 
         write_enabled, write_error = read_env_bool("COLLEAGUE_SLACK_WRITE_ENABLED", False)
+        availability_enabled, availability_error = read_env_bool(
+            "COLLEAGUE_SLACK_AVAILABILITY_ENABLED", False
+        )
         require_mention, mention_error = read_env_bool("COLLEAGUE_SLACK_REQUIRE_MENTION", True)
         gmail_enabled, gmail_enabled_error = read_env_bool("COLLEAGUE_GMAIL_ENABLED", False)
         gmail_write_enabled, gmail_write_error = read_env_bool("COLLEAGUE_GMAIL_WRITE_ENABLED", False)
@@ -71,9 +82,7 @@ class RuntimeConfig(CodedTool):
         stale_after_days, stale_error = self._safe_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
         max_project_items, max_items_error = self._safe_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 500, 1000)
         slack_max_pages, slack_pages_error = self._safe_bounded_int("COLLEAGUE_SLACK_MAX_PAGES", 10, 100)
-        slack_max_requests, slack_requests_error = self._safe_bounded_int(
-            "COLLEAGUE_SLACK_MAX_REQUESTS", 50, 500
-        )
+        slack_max_requests, slack_requests_error = self._safe_bounded_int("COLLEAGUE_SLACK_MAX_REQUESTS", 50, 500)
         slack_max_thread_pages, slack_thread_pages_error = self._safe_bounded_int(
             "COLLEAGUE_SLACK_MAX_THREAD_PAGES", 10, 100
         )
@@ -87,6 +96,7 @@ class RuntimeConfig(CodedTool):
             error
             for error in (
                 write_error,
+                availability_error,
                 mention_error,
                 max_run_error,
                 report_error,
@@ -99,6 +109,7 @@ class RuntimeConfig(CodedTool):
                 slack_attempts_error,
                 gmail_enabled_error,
                 gmail_write_error,
+                repository_allowlist_error,
             )
             if error
         )
@@ -122,6 +133,8 @@ class RuntimeConfig(CodedTool):
                 "owner_type": owner_type,
                 "project_number": project_number,
                 "mcp_read_only": True,
+                "public_repository_read_only": True,
+                "public_repository_allowlist": public_repositories,
             },
             slack={
                 "channel_id": channel_id,
@@ -129,6 +142,7 @@ class RuntimeConfig(CodedTool):
                 "read_ready": not slack_missing and mention_error is None,
                 "require_mention": require_mention,
                 "write_enabled": write_enabled,
+                "availability_enabled": availability_enabled,
             },
             gmail={
                 "enabled": gmail_enabled,

@@ -9,6 +9,7 @@ boundary.
 | Input or capability | Trust | Enforcement |
 | --- | --- | --- |
 | GitHub item text and fields | Untrusted data | Constant query-only reader; owner/project are host environment, not model arguments |
+| Public issue, PR, and source text | Untrusted data | Explicit repository allowlist, public-metadata check, GET-only client, bounded responses |
 | Slack messages | Trusted identity, untrusted text | Fixed IDs, mention filter, bounded batching, delivery-gated checkpoints |
 | GitHub token | Secret | Agent environment only; never returned by RuntimeConfig |
 | Slack tokens | Secret | Environment only; never accepted as tool arguments |
@@ -46,8 +47,10 @@ stable `SLACK_BOT_USER_ID` rather than a display name.
 
 Ticket titles, bodies, comments, links, Slack text, and web pages may contain
 instructions aimed at the model. They never change the system policy or grant
-authority. The initial network intentionally sends only compact project fields
-to the snapshot tool and exposes no GitHub write operation.
+authority. The board path sends only compact project fields to the snapshot
+tool. Ticket, PR, and source reads are delegated to scoped agents behind an
+explicit public-repository allowlist and size limits. Neither path exposes a
+GitHub write operation.
 
 A future action such as editing an issue, moving a Project item, sending email,
 or operating a signed-in browser should be a new narrow tool with:

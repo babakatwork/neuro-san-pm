@@ -17,6 +17,7 @@ def set_valid_config(monkeypatch):
     monkeypatch.setenv("SLACK_CHANNEL_ID", "C123")
     monkeypatch.setenv("SLACK_ALLOWED_USER_IDS", "U1,U2")
     monkeypatch.setenv("COLLEAGUE_SLACK_WRITE_ENABLED", "false")
+    monkeypatch.setenv("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", "false")
     monkeypatch.setenv("COLLEAGUE_SLACK_REQUIRE_MENTION", "true")
     monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "600")
     monkeypatch.setenv("COLLEAGUE_REPORT_INTERVAL_HOURS", "24")
@@ -38,10 +39,27 @@ def test_runtime_config_never_returns_secrets(monkeypatch):
 
     assert result["ok"] is True
     assert result["github"]["project_number"] == 7
+    assert result["github"]["public_repository_allowlist"] == [
+        "cognizant-ai-lab/neuro-san",
+        "cognizant-ai-lab/neuro-san-studio",
+    ]
+    assert result["github"]["public_repository_read_only"] is True
     assert result["slack"]["allowed_user_count"] == 2
     assert result["slack"]["require_mention"] is True
+    assert result["slack"]["availability_enabled"] is False
     assert "github-secret-value" not in raw
     assert "slack-secret-value" not in raw
+
+
+def test_runtime_config_rejects_invalid_public_repository_allowlist(monkeypatch):
+    set_valid_config(monkeypatch)
+    monkeypatch.setenv("GITHUB_READ_ALLOWED_REPOSITORIES", "not-a-full-name")
+
+    result = json.loads(RuntimeConfig().invoke({}, {}))
+
+    assert result["ok"] is False
+    assert result["github"]["public_repository_allowlist"] == []
+    assert "GITHUB_READ_ALLOWED_REPOSITORIES must contain owner/repository names" in result["missing"]
 
 
 def test_runtime_config_reports_daily_summary_readiness_without_recipient(monkeypatch, tmp_path):
@@ -89,6 +107,7 @@ def test_runtime_config_includes_missing_slack_readiness(monkeypatch):
     ("name", "value", "field", "safe_value"),
     [
         ("COLLEAGUE_SLACK_WRITE_ENABLED", "flase", "write_enabled", False),
+        ("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", "tru", "availability_enabled", False),
         ("COLLEAGUE_SLACK_REQUIRE_MENTION", "tru", "require_mention", True),
     ],
 )

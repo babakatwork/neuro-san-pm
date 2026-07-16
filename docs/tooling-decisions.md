@@ -29,6 +29,17 @@ inside coded Python, computes the digest there, and exposes only aggregates and
 bounded attention items to the analyst. The MCP entries remain templates for
 future networks that add an equivalent validating boundary.
 
+For ticket bodies, PRs, and focused source inspection, the network now uses a
+small GET-only GitHub REST client instead of handing raw MCP tools to the front
+agent. `GitHubAssistant` is an intermediate coordinator over the existing
+Kanban analyst and three repository specialists. Those specialists receive only
+the operations they need: one issue reader, a PR reader with bounded patches,
+and repository tree/file readers. The
+host requires an explicit `owner/repository` allowlist, verifies the repository
+is public, rejects traversal and invalid refs, and caps bodies, patches, trees,
+and text files. This allows related public repositories to be added deliberately
+without granting model-selected access to every repository visible to the token.
+
 ## Existing `slack.py`
 
 The cited Agentic RAG Slack tool only reads channel history. Its synchronous
