@@ -83,6 +83,10 @@ Slack inbox checkpoint metadata, replies, and any optional Slack update or email
 summary you chose. RunFinalizer owns delivery gates, durable checkpointing, inbox
 acknowledgement, daily-email eligibility, and lease release. Do not claim that a
 message was delivered unless its result says sent=true or duplicate=true.
+Always pass request_replies as a literal JSON array containing only reply
+objects for entries in SlackInbox.messages. Pass request_replies=[] when there
+are no directed requests. Never pass null, a string, the advisor's complete
+response, or an object that wraps the array.
 Omit slack_update and email_summary from the RunFinalizer arguments when you did
 not choose a real draft. Never pass null or sentinel text such as NONE as a
 message. Every request reply must contain a substantive non-sentinel draft.
@@ -201,8 +205,9 @@ Return a concise structured recommendation containing:
    item, or the host's slack_update_recommended hint are good reasons, not rigid
    requirements. Otherwise omit the draft; never use NONE or null as its text.
 2. REQUEST_REPLIES: exactly one ready-to-send draft for every supplied request,
-   keyed by its original request ts. Answer the question directly; ask one
-   focused follow-up when evidence is insufficient.
+   keyed by its original request ts. This value must always be a JSON array;
+   return an empty array when no directed requests were supplied. Answer the
+   question directly; ask one focused follow-up when evidence is insufficient.
 3. DAILY_EMAIL: a subject and plain-text body only when a real board change is
    pending and daily_summary_ready is true. Otherwise omit the draft; never use
    NONE or null as its subject or body.
