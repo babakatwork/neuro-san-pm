@@ -196,6 +196,68 @@ Every daily-summary recipient must be in the allowlist. Duplicate addresses are
 removed, comparison is case-insensitive, and at most 20 recipients are
 accepted.
 
+## Gmail setup
+
+Outbound Gmail requires both an OAuth desktop client and the Gmail API enabled
+in the same Google Cloud project. Creating the OAuth JSON alone is not enough.
+Google's current end-to-end reference is the
+[Gmail Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python).
+
+1. Create or select a project in the
+   [Google Cloud Console](https://console.cloud.google.com/).
+2. Open the [Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com)
+   for that project and click **Enable**.
+3. In **Google Auth Platform → Branding**, configure an app name, support
+   email, and developer contact email.
+4. In **Google Auth Platform → Audience**, choose **Internal** for a
+   Cognizant-owned project and Cognizant mailbox. Otherwise choose **External**;
+   while the app is in Testing, add the mailbox that will authorize the app as
+   a test user.
+5. In **Google Auth Platform → Clients**, create an OAuth client with
+   application type **Desktop app**, then download its JSON file.
+6. Store that client JSON outside the repository:
+
+   ```bash
+   mkdir -p "$HOME/.config/neuro-san-pm"
+   mv "$HOME/Downloads/client_secret_"*.json \
+     "$HOME/.config/neuro-san-pm/google-oauth-client.json"
+   chmod 600 "$HOME/.config/neuro-san-pm/google-oauth-client.json"
+   ```
+
+7. Authorize both Gmail reading and sending. In the browser, select the mailbox
+   that the colleague should send **from**:
+
+   ```bash
+   cd /Users/m_754339/PycharmProjects/neuro-san-pm
+   .venv/bin/python scripts/setup_gmail.py \
+     --credentials "$HOME/.config/neuro-san-pm/google-oauth-client.json" \
+     --enable-send
+   ```
+
+   This creates `.secrets/gmail-token.json`. Never commit the OAuth client JSON
+   or generated token.
+
+8. Configure the runtime:
+
+   ```dotenv
+   COLLEAGUE_GMAIL_ENABLED=true
+   GMAIL_TOKEN_PATH=.secrets/gmail-token.json
+   COLLEAGUE_GMAIL_WRITE_ENABLED=true
+   GMAIL_ALLOWED_RECIPIENTS=owner@example.com,teammate@example.com
+   COLLEAGUE_DAILY_SUMMARY_TO=owner@example.com,teammate@example.com
+   ```
+
+9. Run `make check`, then restart the server if these environment values changed.
+   If Gmail returns a 403 saying the API has never been used or is disabled,
+   enable the Gmail API in the exact project number named by that error and wait
+   a few minutes for propagation.
+
+An External OAuth app left in Testing issues authorizations and refresh tokens
+that expire after seven days when Gmail scopes are requested. That is suitable
+for a short test, but permanent operation should use an Internal Workspace app
+or an appropriately published/trusted configuration. See Google's
+[audience documentation](https://support.google.com/cloud/answer/15549945).
+
 ## Periodic schedule
 
 The default heartbeat runs every 15 minutes. To run it once per hour, set this

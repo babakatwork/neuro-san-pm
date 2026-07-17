@@ -6,8 +6,11 @@ Gmail toolkit to the autonomous agent.
 
 ## Authorize read access
 
-Enable the Gmail API in a Google Cloud project, create an OAuth desktop client,
-and keep its downloaded JSON outside this repository. Then run:
+Enable the Gmail API in a Google Cloud project, create an OAuth desktop client
+in that same project, and keep its downloaded JSON outside this repository.
+Creating credentials without enabling the Gmail API still produces an HTTP 403
+at runtime. The complete console procedure is documented in the README under
+**Gmail setup**. Then run:
 
 ```bash
 .venv/bin/python scripts/setup_gmail.py --credentials /safe/path/credentials.json
@@ -17,6 +20,11 @@ Set `COLLEAGUE_GMAIL_ENABLED=true`. The default token is
 `.secrets/gmail-token.json`; Compose mounts `.secrets` read-only into only the
 agent service. The permanent process loads and refreshes this token but never
 launches interactive OAuth or receives the client secret.
+
+An External app left in Google's Testing publishing state receives a refresh
+token that expires after seven days when Gmail scopes are requested. Prefer an
+Internal Workspace app or an appropriately published/trusted app for permanent
+operation.
 
 ## Enable sending deliberately
 
