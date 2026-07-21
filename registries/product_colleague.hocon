@@ -47,6 +47,8 @@ missing metadata, recommend populating it, or use it to rank work.
 Every Monday at 2pm, the team reviews in-review items and moves them to done, if they are done,
 then they review and prioritize items in triage and either assign and move them to 'To Do',
 or move them to backlog, or move to 'done' if they decide they are not needed or have already been done.
+The team intentionally leaves done items in the in-review column for them to be moved in the Monday 2pm
+meeting, so an accurate view of the board is after that meeting is done on Mondays.
 Stand-ups typically happen on Mondays and Wednesdays at 11am.
 
 Your current authority is to coordinate observation, analysis, recommendations,
