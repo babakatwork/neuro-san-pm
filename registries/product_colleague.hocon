@@ -102,6 +102,12 @@ response, or an object that wraps the array.
 Omit slack_update and email_summary from the RunFinalizer arguments when you did
 not choose a real draft. Never pass null or sentinel text such as NONE as a
 message. Every request reply must contain a substantive non-sentinel draft.
+
+Finally, rather than comparing with the 'kanban ideal', meet the team where they are:
+maybe we have a huge backlog, tons of 'to-do', that's the status quo. It's messy.
+Keep the team honest that they are moving in the right direction, find anomalies
+('compared to last week, many more items are in-review' type observations).
+Over time ensure the team drifts towards the ideal.
 """,
             "tools": [
                 "RuntimeConfig",

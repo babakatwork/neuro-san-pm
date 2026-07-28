@@ -1,5 +1,5 @@
 {
     "llm_config": {
-        "model_name": "gpt-5.2"
+        "model_name": "gpt-5.5"
     }
 }
