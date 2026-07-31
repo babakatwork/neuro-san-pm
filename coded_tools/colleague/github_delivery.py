@@ -21,6 +21,8 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
+
+from coded_tools.colleague.untrusted_text import sanitize_untrusted_text
 from neuro_san.interfaces.coded_tool import CodedTool
 
 from coded_tools.colleague._runtime import append_audit
@@ -90,6 +92,12 @@ def _positive_number(value: object, label: str = "number") -> int:
     return number
 
 
+def _status_key(value: object) -> str:
+    """Normalize harmless Project spelling variants such as Todo and To Do."""
+    normalized = " ".join(str(value or "").casefold().replace("-", " ").split())
+    return "to do" if normalized == "todo" else normalized
+
+
 @dataclass(frozen=True)
 class _Config:
     token: str
@@ -111,8 +119,6 @@ class _Config:
             raise GitHubDeliveryError(
                 "invalid_config", "PM and coder identity settings must each contain exactly one GitHub login"
             )
-        if {pm[0].casefold(), coder[0].casefold()} & {value.casefold() for value in reviewers}:
-            raise GitHubDeliveryError("invalid_config", "Human reviewers must not include the PM or coder identity")
         try:
             timeout = float(os.getenv("GITHUB_HTTP_TIMEOUT_SECONDS", "15"))
         except ValueError as exc:
@@ -227,8 +233,8 @@ class GitHubIssueDeliveryContext(_DeliveryTool):
         return {
             "repository": f"{owner}/{repo}",
             "number": number,
-            "title": str(issue.get("title") or "")[:500],
-            "body": str(issue.get("body") or "")[:MAX_COMMENT_CHARS],
+            "title": sanitize_untrusted_text(str(issue.get("title") or ""), 500),
+            "body": sanitize_untrusted_text(str(issue.get("body") or ""), MAX_COMMENT_CHARS),
             "state": str(issue.get("state") or "")[:50],
             "assignees": _logins(issue.get("assignees")),
             "comments": _comments(comments),
@@ -253,8 +259,8 @@ class GitHubPullRequestDeliveryContext(_DeliveryTool):
         return {
             "repository": f"{owner}/{repo}",
             "number": number,
-            "title": str(pull.get("title") or "")[:500],
-            "body": str(pull.get("body") or "")[:MAX_COMMENT_CHARS],
+            "title": sanitize_untrusted_text(str(pull.get("title") or ""), 500),
+            "body": sanitize_untrusted_text(str(pull.get("body") or ""), MAX_COMMENT_CHARS),
             "state": str(pull.get("state") or "")[:50],
             "draft": bool(pull.get("draft")),
             "merged": bool(pull.get("merged")),
@@ -285,7 +291,8 @@ class GitHubDeliveryCandidates(CodedTool):
             message = exc.public_message if isinstance(exc, _ReaderError) else exc.message
             append_audit(self.event_name, ok=False, error_code=code)
             return json_result(ok=False, error=message)
-        append_audit(self.event_name, ok=True, candidate_count=len(candidates))
+        policy = self._policy_summary()
+        append_audit(self.event_name, ok=True, candidate_count=len(candidates), **policy)
         return json_result(
             ok=True,
             project=project.get("project"),
@@ -293,10 +300,33 @@ class GitHubDeliveryCandidates(CodedTool):
             candidate_count=len(candidates),
             active_handoffs=active_handoffs,
             active_handoff_count=len(active_handoffs),
+            policy=policy,
         )
 
     async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> str:
         return await asyncio.to_thread(self.invoke, args, sly_data)
+
+    @staticmethod
+    def _policy_summary() -> dict[str, Any]:
+        statuses = sorted(
+            {
+                _status_key(value)
+                for value in os.getenv("AGENTIC_DELIVERY_ELIGIBLE_STATUSES", "Backlog,To Do").split(",")
+                if value.strip()
+            }
+        )
+        repositories = sorted(
+            {
+                value.strip().casefold()
+                for value in os.getenv("GITHUB_DELIVERY_ALLOWED_REPOSITORIES", "").split(",")
+                if value.strip()
+            }
+        )
+        return {
+            "eligible_statuses": statuses,
+            "required_label": os.getenv("AGENTIC_DELIVERY_REQUIRED_LABEL", "").strip().casefold(),
+            "allowed_repositories": repositories,
+        }
 
     @staticmethod
     def _eligible(items: object, allowed_repositories: frozenset[str]) -> list[dict[str, Any]]:
@@ -327,7 +357,7 @@ class GitHubDeliveryCandidates(CodedTool):
             repository = str(item.get("repository") or "")
             if repository.casefold() not in allowed_repositories:
                 continue
-            if str(item.get("status") or "").casefold() not in statuses:
+            if _status_key(item.get("status")) not in {_status_key(value) for value in statuses}:
                 continue
             labels = item.get("labels") if isinstance(item.get("labels"), list) else []
             if required_label and required_label not in {str(value).casefold() for value in labels}:
@@ -462,7 +492,7 @@ def _comments(values: list[Any]) -> list[dict[str, str]]:
     return [
         {
             "author": str((item.get("user") or {}).get("login") or "")[:100],
-            "body": str(item.get("body") or "")[:MAX_COMMENT_CHARS],
+            "body": sanitize_untrusted_text(str(item.get("body") or ""), MAX_COMMENT_CHARS),
             "created_at": str(item.get("created_at") or "")[:100],
             "url": str(item.get("html_url") or "")[:1000],
         }
@@ -476,7 +506,7 @@ def _reviews(values: list[Any]) -> list[dict[str, str]]:
         {
             "author": str((item.get("user") or {}).get("login") or "")[:100],
             "state": str(item.get("state") or "")[:50],
-            "body": str(item.get("body") or "")[:MAX_COMMENT_CHARS],
+            "body": sanitize_untrusted_text(str(item.get("body") or ""), MAX_COMMENT_CHARS),
             "submitted_at": str(item.get("submitted_at") or "")[:100],
         }
         for item in values[:MAX_CONTEXT_COMMENTS]
@@ -615,7 +645,7 @@ class GitHubDeliveryWrite(_DeliveryTool):
     ) -> dict[str, Any]:
         prefix = f"/repos/{quote(owner)}/{quote(repo)}"
         if operation in {"comment_issue", "comment_pr"}:
-            body = str(args.get("body") or "").strip()
+            body = sanitize_untrusted_text(str(args.get("body") or "").strip(), MAX_COMMENT_CHARS)
             if not body or len(body) > MAX_COMMENT_CHARS:
                 raise GitHubDeliveryError("invalid_comment", f"body must be 1-{MAX_COMMENT_CHARS} characters")
             response = client.request("POST", f"{prefix}/issues/{number}/comments", payload={"body": body})

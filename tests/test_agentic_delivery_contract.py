@@ -22,8 +22,6 @@ def test_top_agent_delegates_without_delivery_capabilities(monkeypatch):
         "DeliveryCandidateTriage",
         "CoderSupervisor",
         "DeliveryPullRequestReviewer",
-        "GitHubDeliveryCandidates",
-        "GitHubIssueDeliveryContext",
         "GitHubPullRequestDeliveryContext",
         "GitHubDeliveryWrite",
         "CoderForkBoundary",
@@ -31,8 +29,12 @@ def test_top_agent_delegates_without_delivery_capabilities(monkeypatch):
         "coding_agent",
     }
     assert not forbidden & set(front["tools"])
+    assert "GitHubDeliveryCandidates" in front["tools"]
+    assert "GitHubIssueDeliveryContext" in front["tools"]
     normalized_instructions = " ".join(front["instructions"].split())
     assert "AgenticDeliveryManager is the sole down-chain owner" in normalized_instructions
+    assert "must be passed onward" in normalized_instructions
+    assert "whenever the candidate scan returned a candidate or active handoff" in normalized_instructions
 
 
 def test_top_agent_owns_product_judgment_and_manager_owns_execution(monkeypatch):

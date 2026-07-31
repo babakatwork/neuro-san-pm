@@ -123,6 +123,22 @@ def test_candidates_are_fixed_board_bounded_policy_and_include_active_handoffs(m
     assert result["candidates"][0]["repo"] == "neuro-san"
 
 
+def test_candidates_accept_todo_status_alias(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("AGENTIC_DELIVERY_ELIGIBLE_STATUSES", "Todo")
+    project = {
+        "project": {"owner": "cognizant-ai-lab", "number": 7},
+        "items": [board_item(1, "To Do", [], labels=[])],
+    }
+    monkeypatch.setattr(
+        "coded_tools.colleague.github_delivery.GitHubProjectReader._read_project",
+        lambda config: project,
+    )
+    result = json.loads(GitHubDeliveryCandidates().invoke({}, {}))
+    assert result["ok"] is True
+    assert [item["number"] for item in result["candidates"]] == [1]
+
+
 def test_writes_are_default_off_and_do_not_contact_github(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path, writes=False)
     monkeypatch.setattr(
@@ -384,3 +400,17 @@ def test_delivery_context_reads_pr_conversation_and_reviews(monkeypatch, tmp_pat
     assert result["ok"] is True
     assert result["comments"][0]["body"] == "Review summary"
     assert result["reviews"][0]["state"] == "CHANGES_REQUESTED"
+
+
+def test_delivery_context_redacts_local_paths_and_secrets(monkeypatch, tmp_path):
+    from coded_tools.colleague.github_delivery import GitHubIssueDeliveryContext
+    configure(monkeypatch, tmp_path)
+    issue = {"title": "Fix /Users/alice/project", "body": "token=ghp_abcdefghijklmnop1234 and /home/alice/x"}
+    comments = [{"user": {"login": "alice"}, "body": "See /private/var/tmp/work"}]
+    monkeypatch.setattr("coded_tools.colleague.github_delivery._Client.request", lambda self, method, path, **kwargs: issue if "/issues/42" in path and "comments" not in path else comments)
+    result = GitHubIssueDeliveryContext().invoke({"owner": "cognizant-ai-lab", "repo": "neuro-san", "number": "42"}, {})
+    import json
+    payload = json.loads(result)
+    text = json.dumps(payload)
+    assert "/Users/" not in text and "/home/" not in text and "ghp_" not in text
+    assert "<redacted-local-path>" in text and "<redacted-secret>" in text

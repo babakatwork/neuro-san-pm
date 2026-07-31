@@ -179,17 +179,29 @@ def main() -> int:
             errors.append("configured PM, coder, and reviewer GitHub logins must be valid login names")
         pm_login, coder_login, *reviewers = logins
         if pm_login.casefold() == coder_login.casefold():
-            errors.append("GITHUB_DELIVERY_PM_LOGIN and GITHUB_DELIVERY_CODER_LOGIN must differ")
+            warnings.append(
+                "GITHUB_DELIVERY_PM_LOGIN and GITHUB_DELIVERY_CODER_LOGIN are the same; "
+                "separate automation identities are recommended"
+            )
         automation = {pm_login.casefold(), coder_login.casefold()}
         if automation & {reviewer.casefold() for reviewer in reviewers}:
-            errors.append("human reviewers must not include the configured PM or coder")
+            warnings.append(
+                "human reviewers include the configured PM or coder; "
+                "a separate human reviewer is recommended"
+            )
         eligible = {value.casefold() for value in comma_values("AGENTIC_DELIVERY_ELIGIBLE_STATUSES")}
         if not eligible or not eligible <= {"backlog", "to do"}:
-            errors.append("AGENTIC_DELIVERY_ELIGIBLE_STATUSES may contain only Backlog and To Do")
+            warnings.append(
+                "AGENTIC_DELIVERY_ELIGIBLE_STATUSES includes values other than Backlog and To Do; "
+                "verify the configured Project status names"
+            )
         pm_token = os.getenv("GITHUB_PM_TOKEN", "").strip()
         coder_token = os.getenv("GITHUB_CODER_TOKEN", "").strip()
         if pm_token and coder_token and pm_token == coder_token:
-            errors.append("GITHUB_PM_TOKEN and GITHUB_CODER_TOKEN must be different credentials")
+            warnings.append(
+                "GITHUB_PM_TOKEN and GITHUB_CODER_TOKEN are the same credential; "
+                "separate least-privilege credentials are recommended"
+            )
         launcher = (ROOT / "scripts" / "coder_codex_launcher.py").resolve()
         executable = os.getenv("CODING_AGENT_CODEX_EXECUTABLE", str(launcher)).strip()
         resolved_executable = shutil.which(executable)

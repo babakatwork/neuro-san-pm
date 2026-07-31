@@ -78,7 +78,7 @@ def test_prepare_workspace_enforces_permissions_and_rewrites_remotes(monkeypatch
     assert repository(workspace, "config", "--get", "remote.upstream.url") == "https://github.com/upstream/project.git"
 
 
-def test_prepare_workspace_rejects_any_upstream_push_permission(monkeypatch, tmp_path):
+def test_prepare_workspace_rejects_coder_upstream_push_permission(monkeypatch, tmp_path):
     workspace = tmp_path / "project"
     workspace.mkdir()
     repository(workspace, "init")
@@ -103,8 +103,29 @@ def test_prepare_workspace_rejects_any_upstream_push_permission(monkeypatch, tmp
             {},
         )
     )
-    assert result == {"error": "PM and coder must not have upstream push permission", "ok": False}
+    assert result == {"error": "Coder must not have upstream push permission", "ok": False}
     assert repository(workspace, "config", "--get", "remote.origin.url") == "https://github.com/upstream/project.git"
+
+
+def test_prepare_workspace_allows_pm_upstream_push_permission(monkeypatch, tmp_path):
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    repository(workspace, "init")
+    repository(workspace, "remote", "add", "origin", "https://github.com/upstream/project.git")
+    configure(monkeypatch, workspace)
+
+    def get(url, *, headers, **kwargs):
+        response = permission_response(url, headers)
+        if url.endswith("/repos/upstream/project") and headers["Authorization"] == "Bearer pm-token":
+            response.payload["permissions"]["push"] = True
+        return response
+
+    monkeypatch.setattr("coded_tools.colleague.fork_delivery.requests.get", get)
+    result = json.loads(CoderForkBoundary().invoke({
+        "operation": "prepare_workspace", "owner": "upstream", "repo": "project",
+        "workspace": str(workspace),
+    }, {}))
+    assert result["ok"] is True
 
 
 def test_verify_pr_requires_open_cross_fork_default_branch(monkeypatch, tmp_path):
@@ -202,3 +223,27 @@ def test_launcher_exposes_only_coder_token_and_isolates_git_config(monkeypatch, 
     assert child["GIT_ALLOW_PROTOCOL"] == "https:file"
     assert child["SSH_AUTH_SOCK"] is None
     assert child["NEURO_SAN_CODER_FORK_ONLY"] == "true"
+
+
+def test_launcher_allows_same_pm_and_coder_token_with_warning(monkeypatch, tmp_path):
+    capture = tmp_path / "capture_same.py"
+    capture.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os\n"
+        "print(json.dumps({'token': os.environ.get('GITHUB_TOKEN')}))\n",
+        encoding="utf-8",
+    )
+    capture.chmod(0o755)
+    launcher = Path(__file__).resolve().parents[1] / "scripts" / "coder_codex_launcher.py"
+    env = os.environ.copy()
+    env.update(
+        {
+            "GITHUB_PM_TOKEN": "same-token",
+            "GITHUB_CODER_TOKEN": "same-token",
+            "CODING_AGENT_REAL_CODEX_EXECUTABLE": str(capture),
+        }
+    )
+    completed = subprocess.run([str(launcher)], capture_output=True, text=True, env=env, check=False)
+    assert completed.returncode == 0
+    assert json.loads(completed.stdout)["token"] == "same-token"
+    assert "identical" in completed.stderr

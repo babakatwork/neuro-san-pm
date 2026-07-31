@@ -101,7 +101,7 @@ def _remote_repository(value: str) -> str | None:
 
 def _github_repository(token: str, owner: str, repo: str) -> dict[str, Any]:
     if not token:
-        raise ForkBoundaryError("Separate PM and coder GitHub tokens are required")
+        raise ForkBoundaryError("A GitHub token is required")
     response = requests.get(
         f"{API_ROOT}/repos/{quote(owner)}/{quote(repo)}",
         headers={
@@ -167,14 +167,25 @@ class CoderForkBoundary(CodedTool):
         fork_name = f"{coder}/{repo}".casefold()
         pm_token = os.getenv("GITHUB_PM_TOKEN", "").strip()
         coder_token = os.getenv("GITHUB_CODER_TOKEN", "").strip()
-        if not pm_token or not coder_token or pm_token == coder_token:
-            raise ForkBoundaryError("Separate PM and coder GitHub tokens are required")
+        if not pm_token or not coder_token:
+            raise ForkBoundaryError("Non-empty PM and coder GitHub tokens are required")
+        if pm_token == coder_token:
+            append_audit(
+                "coder_fork_boundary",
+                ok=True,
+                operation="prepare_workspace",
+                warning="PM and coder GitHub tokens are identical; credential separation is disabled",
+            )
         upstream_as_pm = _github_repository(pm_token, owner, repo)
         upstream_as_coder = _github_repository(coder_token, owner, repo)
         fork_as_coder = _github_repository(coder_token, coder, repo)
         parent = fork_as_coder.get("parent")
-        if _can_push(upstream_as_pm) or _can_push(upstream_as_coder):
-            raise ForkBoundaryError("PM and coder must not have upstream push permission")
+        # The PM credential may legitimately have upstream repository push
+        # permission. It is never exposed to the coding subprocess. The
+        # enforceable fork boundary is that the coder credential cannot push
+        # upstream; coder writes must go only to its verified fork.
+        if _can_push(upstream_as_coder):
+            raise ForkBoundaryError("Coder must not have upstream push permission")
         if (
             not _can_push(fork_as_coder)
             or not bool(fork_as_coder.get("fork"))

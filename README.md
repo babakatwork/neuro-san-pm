@@ -35,7 +35,7 @@ provide no merge, close, delete, source-write, or formal-approval operation.
 - The existing `neuro-san-coder` pinned as a source dependency and invoked
   directly as a coded tool; every assignment starts a fresh session. A bundled
   launcher isolates its credential, permits HTTPS only, pushes to the coder's
-  verified fork, and rejects upstream-write permissions and non-fork PRs.
+  verified fork, and rejects coder upstream-write permissions and non-fork PRs.
 - Compact deterministic change state: aggregate counts and bounded attention
   items reach the LLM, while all cards still contribute to the digest.
 - Slack inbox context constrained to one channel; explicit users and mentions
@@ -477,16 +477,21 @@ gh auth status
 
 ### 2. Prepare separate GitHub identities and forks
 
-Use three distinct identities:
+Use separate automation and human identities for the safest deployment:
 
-- A PM machine user with upstream **Triage** access and configured Project
-  write access, but no upstream repository Write permission.
+- A PM machine user with configured Project, issue, and PR write access.
+  Upstream repository push permission is permitted for the PM credential, but
+  it is never exposed to the coding subprocess.
 - A coder machine user with no upstream Write permission and a same-name fork
   of each allowlisted public repository.
 - One or more human reviewers, distinct from both automation identities.
 
-Create distinct credentials for the PM and coder. Confirm their identities and
-permissions before enabling the feature. These commands expect the token
+The configuration checker permits the same PM/coder login and non-empty
+credential for an initial trial, but warns about the reduced separation. The
+coder fork boundary requires that the coder credential cannot push to the
+upstream repository; PM repository push permission does not block handoff.
+Confirm the identities and permissions before enabling the feature.
+These commands expect the token
 variables to be exported in the current shell; otherwise substitute them using
 your normal secret-management workflow:
 
@@ -497,7 +502,8 @@ GH_TOKEN="$GITHUB_PM_TOKEN" gh api repos/OWNER/REPOSITORY --jq .permissions.push
 GH_TOKEN="$GITHUB_CODER_TOKEN" gh api repos/OWNER/REPOSITORY --jq .permissions.push
 ```
 
-Both upstream permission checks must print `false`. Create or verify the coder
+The coder upstream permission check must print `false`; the PM check may be
+`true` when the PM token is a broad repository token. Create or verify the coder
 fork, then confirm that it belongs to the expected upstream and is writable by
 the coder:
 
@@ -581,10 +587,12 @@ The feature remains disabled at this point, so no external write is performed.
 
 ### 6. Create a disposable canary issue
 
-Create one small documentation- or test-only issue in an allowlisted upstream
-repository. Give it explicit acceptance criteria and the `pm-agentic-e2e`
-label. Add it to the configured Project in `Backlog` or `To Do`, leave it
-unassigned, and ensure no other issue has that label.
+Create a fresh, disposable, small documentation- or test-only issue in an
+allowlisted upstream repository. Give it explicit acceptance criteria and the
+`pm-agentic-e2e` label. Add it to the configured Project in `Backlog` or
+`To Do`, leave it unassigned, and ensure no other issue has that label. Use a
+new canary ticket after a blocked or failed attempt so stale approval and
+handoff state cannot affect the verification.
 
 ### 7. Enable the live canary
 
@@ -654,6 +662,10 @@ gh pr view PR_URL --json state,mergedAt,headRepositoryOwner,baseRefName,reviewRe
 `state` must be `OPEN` and `mergedAt` must be `null`. The PM and coder tools do
 not expose merge, close, delete, source-write-to-upstream, or formal PR approval
 operations.
+
+Issue and PR text is untrusted input. Context passed to agents and outbound
+GitHub comments is bounded and redacts local filesystem paths and common
+credential/token formats. Do not put secrets in tickets or comments.
 
 ### 9. Disable or expand after the canary
 

@@ -14,6 +14,7 @@ from neuro_san.interfaces.coded_tool import CodedTool
 
 from coded_tools.colleague._runtime import append_audit
 from coded_tools.colleague._runtime import json_result
+from coded_tools.colleague.untrusted_text import sanitize_untrusted_text
 
 API_ROOT = "https://api.github.com"
 DEFAULT_REPOSITORIES = "cognizant-ai-lab/neuro-san,cognizant-ai-lab/neuro-san-studio"
@@ -164,8 +165,8 @@ class GitHubIssueRead(_GitHubReadTool):
         return {
             "repository": f"{owner}/{repo}",
             "number": number,
-            "title": str(issue.get("title") or "")[:500],
-            "body": str(issue.get("body") or "")[:MAX_BODY_CHARS],
+            "title": sanitize_untrusted_text(str(issue.get("title") or ""), 500),
+            "body": sanitize_untrusted_text(str(issue.get("body") or ""), MAX_BODY_CHARS),
             "state": str(issue.get("state") or "")[:50],
             "url": str(issue.get("html_url") or "")[:1000],
             "author": str(user.get("login") or "")[:200] if isinstance(user, dict) else "",
@@ -219,8 +220,8 @@ class GitHubPullRequestRead(_GitHubReadTool):
         return {
             "repository": f"{owner}/{repo}",
             "number": number,
-            "title": str(pull.get("title") or "")[:500],
-            "body": str(pull.get("body") or "")[:MAX_BODY_CHARS],
+            "title": sanitize_untrusted_text(str(pull.get("title") or ""), 500),
+            "body": sanitize_untrusted_text(str(pull.get("body") or ""), MAX_BODY_CHARS),
             "state": str(pull.get("state") or "")[:50],
             "draft": bool(pull.get("draft")),
             "merged": bool(pull.get("merged")),
