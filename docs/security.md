@@ -62,6 +62,12 @@ or operating a signed-in browser should be a new narrow tool with:
 5. a secret-free audit record;
 6. a deterministic rollback or compensation path where possible.
 
+For agentic-coder approval, the model may interpret a natural Slack response,
+but it cannot invent its provenance. The host re-fetches the referenced message
+and requires an unexpired proposal, the exact proposal thread and channel, and
+an allowlisted human author before storing the terminal decision. The audit
+state stores the message timestamp and content hash, not the reply body.
+
 ## Network policy
 
 The permanent Compose stack does not publish the Neuro SAN port. The registry's

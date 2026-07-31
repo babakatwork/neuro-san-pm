@@ -1,0 +1,3 @@
+[submodule "vendor/neuro-san-coder"]
+	path = vendor/neuro-san-coder
+	url = ssh://git@ssh.github.com:443/babakatwork/neuro-san-coder.git

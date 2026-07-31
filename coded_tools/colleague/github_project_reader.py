@@ -60,6 +60,7 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
               title
               url
               updatedAt
+              repository { nameWithOwner }
               assignees(first: 100) { totalCount nodes { login } }
               labels(first: 100) { totalCount nodes { name } }
             }
@@ -69,6 +70,7 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
               title
               url
               updatedAt
+              repository { nameWithOwner }
               assignees(first: 100) { totalCount nodes { login } }
               labels(first: 100) { totalCount nodes { name } }
             }
@@ -140,9 +142,7 @@ class GitHubProjectReader(CodedTool):
         try:
             project_number = int(project_number_raw)
         except ValueError as exc:
-            raise _ReaderError(
-                "invalid_project_number", "GITHUB_PROJECT_NUMBER must be a positive integer"
-            ) from exc
+            raise _ReaderError("invalid_project_number", "GITHUB_PROJECT_NUMBER must be a positive integer") from exc
         if project_number <= 0:
             raise _ReaderError("invalid_project_number", "GITHUB_PROJECT_NUMBER must be a positive integer")
         max_items = GitHubProjectReader._bounded_int(
@@ -323,6 +323,12 @@ class GitHubProjectReader(CodedTool):
         return {
             "id": cls._bounded_string(node.get("id") or content.get("id"), 1000),
             "type": type_name,
+            "repository": cls._bounded_string(
+                content.get("repository", {}).get("nameWithOwner")
+                if isinstance(content.get("repository"), dict)
+                else "",
+                300,
+            ),
             "number": cls._bounded_string(content.get("number"), 100),
             "title": cls._bounded_string(content.get("title"), 500),
             "url": cls._bounded_string(content.get("url"), 1000),

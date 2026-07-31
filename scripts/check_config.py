@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import shutil
 import sys
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError
@@ -24,6 +27,12 @@ from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipi
 
 TRUE_ENV_VALUES = frozenset({"1", "true", "t", "yes", "y", "on"})
 FALSE_ENV_VALUES = frozenset({"0", "false", "f", "no", "n", "off"})
+GITHUB_LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+
+
+def comma_values(name: str) -> list[str]:
+    """Return non-empty comma-separated configuration values."""
+    return [value.strip() for value in os.getenv(name, "").split(",") if value.strip()]
 
 
 def read_env_bool(name: str, default: bool = False) -> tuple[bool, str | None]:
@@ -107,6 +116,14 @@ def main() -> int:
     _, mention_error = read_env_bool("COLLEAGUE_SLACK_REQUIRE_MENTION", True)
     errors.extend(error for error in (write_error, availability_error, mention_error) if error)
 
+    agentic_enabled, agentic_error = read_env_bool("COLLEAGUE_AGENTIC_DEVELOPMENT_ENABLED", False)
+    github_write_enabled, github_write_error = read_env_bool("GITHUB_DELIVERY_WRITE_ENABLED", False)
+    errors.extend(error for error in (agentic_error, github_write_error) if error)
+    coder_timeout, coder_timeout_error = read_positive_int("CODING_AGENT_TIMEOUT_SECONDS", 480)
+    _, approval_ttl_error = read_bounded_int("AGENTIC_DELIVERY_APPROVAL_TTL_SECONDS", 259200, 604800)
+    _, agentic_stale_error = read_bounded_int("AGENTIC_DELIVERY_STALE_AFTER_DAYS", 14, 3650)
+    errors.extend(error for error in (coder_timeout_error, approval_ttl_error, agentic_stale_error) if error)
+
     cron = os.getenv("COLLEAGUE_CRON_SCHEDULE", "*/15 * * * *")
     max_run, max_run_error = read_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
     _, report_error = read_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
@@ -134,6 +151,92 @@ def main() -> int:
     )
     if max_run != 600:
         errors.append("COLLEAGUE_MAX_RUN_SECONDS must be 600 to match the agent timeout")
+    if agentic_enabled:
+        if not github_write_enabled:
+            errors.append("GITHUB_DELIVERY_WRITE_ENABLED must be true when agentic development is enabled")
+        required_agentic = (
+            "CODING_AGENT_ALLOWED_WORKSPACES",
+            "CODING_AGENT_PRIMARY_WORKSPACE",
+            "CODING_AGENT_GIT_NAME",
+            "CODING_AGENT_GIT_EMAIL",
+            "GITHUB_PM_TOKEN",
+            "GITHUB_CODER_TOKEN",
+            "GITHUB_DELIVERY_ALLOWED_REPOSITORIES",
+            "GITHUB_DELIVERY_PM_LOGIN",
+            "GITHUB_DELIVERY_CODER_LOGIN",
+            "GITHUB_DELIVERY_HUMAN_REVIEWERS",
+            "GITHUB_PROJECT_ID",
+            "GITHUB_PROJECT_STATUS_FIELD_ID",
+            "GITHUB_PROJECT_STATUS_OPTIONS_JSON",
+        )
+        errors.extend(f"missing {name}" for name in required_agentic if not os.getenv(name, "").strip())
+        logins = [
+            os.getenv("GITHUB_DELIVERY_PM_LOGIN", "").strip(),
+            os.getenv("GITHUB_DELIVERY_CODER_LOGIN", "").strip(),
+            *comma_values("GITHUB_DELIVERY_HUMAN_REVIEWERS"),
+        ]
+        if any(login and not GITHUB_LOGIN_RE.fullmatch(login) for login in logins):
+            errors.append("configured PM, coder, and reviewer GitHub logins must be valid login names")
+        pm_login, coder_login, *reviewers = logins
+        if pm_login.casefold() == coder_login.casefold():
+            errors.append("GITHUB_DELIVERY_PM_LOGIN and GITHUB_DELIVERY_CODER_LOGIN must differ")
+        automation = {pm_login.casefold(), coder_login.casefold()}
+        if automation & {reviewer.casefold() for reviewer in reviewers}:
+            errors.append("human reviewers must not include the configured PM or coder")
+        eligible = {value.casefold() for value in comma_values("AGENTIC_DELIVERY_ELIGIBLE_STATUSES")}
+        if not eligible or not eligible <= {"backlog", "to do"}:
+            errors.append("AGENTIC_DELIVERY_ELIGIBLE_STATUSES may contain only Backlog and To Do")
+        pm_token = os.getenv("GITHUB_PM_TOKEN", "").strip()
+        coder_token = os.getenv("GITHUB_CODER_TOKEN", "").strip()
+        if pm_token and coder_token and pm_token == coder_token:
+            errors.append("GITHUB_PM_TOKEN and GITHUB_CODER_TOKEN must be different credentials")
+        launcher = (ROOT / "scripts" / "coder_codex_launcher.py").resolve()
+        executable = os.getenv("CODING_AGENT_CODEX_EXECUTABLE", str(launcher)).strip()
+        resolved_executable = shutil.which(executable)
+        if not resolved_executable or Path(resolved_executable).resolve() != launcher:
+            errors.append("CODING_AGENT_CODEX_EXECUTABLE must be the bundled fork-only launcher")
+        real_executable = os.getenv("CODING_AGENT_REAL_CODEX_EXECUTABLE", "codex").strip()
+        if not real_executable or shutil.which(real_executable) is None:
+            errors.append("CODING_AGENT_REAL_CODEX_EXECUTABLE was not found")
+        git_email = os.getenv("CODING_AGENT_GIT_EMAIL", "").strip()
+        if git_email and (
+            len(git_email) > 254
+            or git_email.count("@") != 1
+            or any(character.isspace() for character in git_email)
+        ):
+            errors.append("CODING_AGENT_GIT_EMAIL must be a valid non-whitespace email address")
+        if coder_timeout > max_run - 60:
+            errors.append(
+                "CODING_AGENT_TIMEOUT_SECONDS must leave at least 60 seconds "
+                "inside COLLEAGUE_MAX_RUN_SECONDS"
+            )
+        primary = Path(os.getenv("CODING_AGENT_PRIMARY_WORKSPACE", "")).expanduser().resolve()
+        roots = [
+            Path(value).expanduser().resolve()
+            for value in os.getenv("CODING_AGENT_ALLOWED_WORKSPACES", "").split(os.pathsep)
+            if value.strip()
+        ]
+        if (
+            not primary.is_dir()
+            or not (primary / ".git").exists()
+            or not any(primary == root or primary.is_relative_to(root) for root in roots)
+        ):
+            errors.append("CODING_AGENT_PRIMARY_WORKSPACE must be an existing allowed Git workspace")
+        node_id_re = re.compile(r"[A-Za-z0-9_=-]{1,200}")
+        for name in ("GITHUB_PROJECT_ID", "GITHUB_PROJECT_STATUS_FIELD_ID"):
+            if not node_id_re.fullmatch(os.getenv(name, "").strip()):
+                errors.append(f"{name} must be a GitHub node ID")
+        try:
+            status_options = json.loads(os.getenv("GITHUB_PROJECT_STATUS_OPTIONS_JSON", "{}"))
+        except json.JSONDecodeError:
+            status_options = {}
+            errors.append("GITHUB_PROJECT_STATUS_OPTIONS_JSON must be valid JSON")
+        if not isinstance(status_options, dict) or not {"In Progress", "In Review"} <= set(status_options):
+            errors.append("GITHUB_PROJECT_STATUS_OPTIONS_JSON must map In Progress and In Review")
+        elif any(not node_id_re.fullmatch(str(value)) for value in status_options.values()):
+            errors.append("GitHub Project status option values must be node IDs")
+    elif github_write_enabled:
+        warnings.append("GitHub delivery writes are enabled while agentic development is disabled")
     try:
         iterator = croniter(cron, datetime.now())
         first = iterator.get_next(datetime)
@@ -161,6 +264,8 @@ def main() -> int:
 
     if not write_enabled:
         warnings.append("Slack posting is in dry-run mode (recommended for the first run)")
+    if not agentic_enabled:
+        warnings.append("Agentic development is disabled until the verification canary is complete")
     daily_summary_recipients, daily_summary_error = validate_daily_summary_recipients(
         os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
         os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),

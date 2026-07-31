@@ -61,7 +61,10 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     frontman = tools["ProductColleague"]
     assert "already exists and is the team's authoritative" in frontman["instructions"]
     assert "never propose or attempt to" in frontman["instructions"]
-    assert "cannot modify GitHub" in frontman["instructions"]
+    normalized_frontman = " ".join(frontman["instructions"].split())
+    assert "own the product judgment for agentic-delivery discovery" in normalized_frontman
+    assert "AgenticDeliveryManager is the sole down-chain owner" in normalized_frontman
+    assert "If nothing warrants delivery attention, do not invoke the manager" in normalized_frontman
     assert "vertical card order" in frontman["instructions"]
 
     advisor = tools["ProductManagerAdvisor"]

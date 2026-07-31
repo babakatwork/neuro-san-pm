@@ -70,6 +70,8 @@ class RuntimeConfig(CodedTool):
         require_mention, mention_error = read_env_bool("COLLEAGUE_SLACK_REQUIRE_MENTION", True)
         gmail_enabled, gmail_enabled_error = read_env_bool("COLLEAGUE_GMAIL_ENABLED", False)
         gmail_write_enabled, gmail_write_error = read_env_bool("COLLEAGUE_GMAIL_WRITE_ENABLED", False)
+        agentic_enabled, agentic_error = read_env_bool("COLLEAGUE_AGENTIC_DEVELOPMENT_ENABLED", False)
+        github_write_enabled, github_write_error = read_env_bool("GITHUB_DELIVERY_WRITE_ENABLED", False)
         gmail_token_path = Path(os.getenv("GMAIL_TOKEN_PATH", ".secrets/gmail-token.json"))
         gmail_allowed = set(parse_email_list(os.getenv("GMAIL_ALLOWED_RECIPIENTS", "")))
         daily_summary_recipients, daily_summary_error = validate_daily_summary_recipients(
@@ -92,6 +94,15 @@ class RuntimeConfig(CodedTool):
         slack_event_max_attempts, slack_attempts_error = self._safe_bounded_int(
             "COLLEAGUE_SLACK_EVENT_MAX_ATTEMPTS", 3, 10
         )
+        coder_timeout_seconds, coder_timeout_error = self._safe_positive_int(
+            "CODING_AGENT_TIMEOUT_SECONDS", 480
+        )
+        approval_ttl_hours, approval_ttl_error = self._safe_bounded_int(
+            "AGENTIC_DELIVERY_APPROVAL_TTL_SECONDS", 259200, 604800
+        )
+        agentic_stale_days, agentic_stale_error = self._safe_bounded_int(
+            "AGENTIC_DELIVERY_STALE_AFTER_DAYS", 14, 3650
+        )
         missing.extend(
             error
             for error in (
@@ -109,6 +120,11 @@ class RuntimeConfig(CodedTool):
                 slack_attempts_error,
                 gmail_enabled_error,
                 gmail_write_error,
+                agentic_error,
+                github_write_error,
+                coder_timeout_error,
+                approval_ttl_error,
+                agentic_stale_error,
                 repository_allowlist_error,
             )
             if error
@@ -124,6 +140,35 @@ class RuntimeConfig(CodedTool):
             all_problems.append("COLLEAGUE_GMAIL_ENABLED must be true before Gmail writes can be enabled")
         if gmail_write_enabled and not gmail_allowed:
             all_problems.append("GMAIL_ALLOWED_RECIPIENTS is required when Gmail writes are enabled")
+        agentic_required = (
+            "CODING_AGENT_ALLOWED_WORKSPACES",
+            "CODING_AGENT_PRIMARY_WORKSPACE",
+            "CODING_AGENT_GIT_NAME",
+            "CODING_AGENT_GIT_EMAIL",
+            "GITHUB_PM_TOKEN",
+            "GITHUB_CODER_TOKEN",
+            "GITHUB_DELIVERY_ALLOWED_REPOSITORIES",
+            "GITHUB_DELIVERY_PM_LOGIN",
+            "GITHUB_DELIVERY_CODER_LOGIN",
+            "GITHUB_DELIVERY_HUMAN_REVIEWERS",
+            "GITHUB_PROJECT_ID",
+            "GITHUB_PROJECT_STATUS_FIELD_ID",
+            "GITHUB_PROJECT_STATUS_OPTIONS_JSON",
+        )
+        if agentic_enabled:
+            if not github_write_enabled:
+                all_problems.append(
+                    "GITHUB_DELIVERY_WRITE_ENABLED must be true when agentic development is enabled"
+                )
+            all_problems.extend(
+                f"{name} is required when agentic development is enabled"
+                for name in agentic_required
+                if not os.getenv(name, "").strip()
+            )
+            if coder_timeout_seconds > max_run_seconds - 60:
+                all_problems.append(
+                    "CODING_AGENT_TIMEOUT_SECONDS must leave 60 seconds inside COLLEAGUE_MAX_RUN_SECONDS"
+                )
         all_problems = sorted(set(all_problems))
 
         return json_result(
@@ -159,6 +204,29 @@ class RuntimeConfig(CodedTool):
                     and gmail_token_path.is_file()
                 ),
                 "query_prefix_configured": bool(os.getenv("GMAIL_QUERY_PREFIX", "in:inbox newer_than:30d").strip()),
+            },
+            agentic_development={
+                "enabled": agentic_enabled,
+                "github_write_enabled": github_write_enabled,
+                "configured": not any(not os.getenv(name, "").strip() for name in agentic_required),
+                "eligible_statuses": [
+                    value.strip()
+                    for value in os.getenv(
+                        "AGENTIC_DELIVERY_ELIGIBLE_STATUSES", "Backlog,To Do"
+                    ).split(",")
+                    if value.strip()
+                ],
+                "stale_after_days": agentic_stale_days,
+                "approval_ttl_seconds": approval_ttl_hours,
+                "coder_timeout_seconds": coder_timeout_seconds,
+                "coder_primary_workspace": os.getenv("CODING_AGENT_PRIMARY_WORKSPACE", "").strip(),
+                "human_reviewer_count": len(
+                    [
+                        value
+                        for value in os.getenv("GITHUB_DELIVERY_HUMAN_REVIEWERS", "").split(",")
+                        if value.strip()
+                    ]
+                ),
             },
             policy={
                 "max_run_seconds": max_run_seconds,

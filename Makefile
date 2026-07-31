@@ -3,7 +3,7 @@ export NEURO_SAN_PM_HTTP_PORT
 export NEURO_SAN_SERVER_HTTP_PORT := $(NEURO_SAN_PM_HTTP_PORT)
 export NEURO_SAN_BASE_URL := http://localhost:$(NEURO_SAN_PM_HTTP_PORT)
 
-.PHONY: setup check test lint validate run trigger slack-bridge up down
+.PHONY: setup check test agentic-test lint validate run trigger slack-bridge up down
 
 setup:
 	python -m venv .venv
@@ -14,6 +14,14 @@ check:
 
 test:
 	.venv/bin/python -m pytest
+
+agentic-test:
+	.venv/bin/python -m pytest \
+		tests/test_coder_dependency.py \
+		tests/test_slack_coder_approval.py \
+		tests/test_github_delivery.py \
+		tests/test_fork_delivery.py \
+		tests/test_agentic_delivery_contract.py
 
 lint:
 	.venv/bin/python -m ruff check .
