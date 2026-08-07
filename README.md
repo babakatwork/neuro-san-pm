@@ -375,10 +375,10 @@ Then configure event delivery:
    `connections:write`. This is the `xapp-...` value for
    `SLACK_APP_TOKEN`, not the bot token.
 3. Under **Event Subscriptions**, enable events and add the `app_mention` bot
-   event plus `message.channels` so replies in the configured channel can wake
-   the colleague without a bot mention. Add `message.im` only if direct
-   messages should wake the colleague. Socket Mode does not require a public
-   Request URL.
+   event plus `message.channels` so replies in the configured public channel
+   can wake the colleague without a bot mention. For a private channel, add
+   `message.groups` instead. Add `message.im` only if direct messages should
+   wake the colleague. Socket Mode does not require a public Request URL.
 4. Reinstall the app to the workspace after changing scopes or subscriptions.
 5. Invite `@Colleague` to the configured channel.
 
@@ -429,6 +429,13 @@ Slack inbox and replies in the message thread. Ambient top-level channel
 messages are picked up by periodic scans without causing immediate wake-ups or
 mandatory replies. Inspect `.state/audit.jsonl` for `slack_inbox`,
 `slack_post`, and run lifecycle events if no reply appears.
+
+An ordinary reply in a Colleague thread is also a directed request and does
+not need another `@Colleague` mention. It requires the matching
+`message.channels` or `message.groups` subscription above; without it, Slack
+does not deliver the reply to the Socket Mode bridge. Mentioning `@Colleague`
+remains a reliable immediate workaround while that subscription is being added
+or the app is being reinstalled.
 
 The bridge forwards a top-level Neuro SAN `ChatRequest` with a `MINIMAL` chat
 filter. It never copies teammate text into that HTTP request; the network reads
