@@ -143,7 +143,9 @@ class SlackInbox(CodedTool):
                     ),
                     None,
                 )
-                message = self._channel_message(raw_event, allowed_users, bot_user_id, require_mention)
+                message = self._channel_message(
+                    raw_event, allowed_users, bot_user_id, require_mention, allow_thread_reply=True
+                )
                 if message is not None:
                     context_by_ts[timestamp] = message
                     scanned_timestamps.append(timestamp)
@@ -301,6 +303,7 @@ class SlackInbox(CodedTool):
         allowed_users: set[str],
         bot_user_id: str,
         require_mention: bool,
+        allow_thread_reply: bool = False,
     ) -> dict[str, Any] | None:
         if not isinstance(raw, dict) or raw.get("bot_id") or raw.get("subtype"):
             return None
@@ -313,7 +316,11 @@ class SlackInbox(CodedTool):
             return None
         mention = f"<@{bot_user_id}>" if bot_user_id else ""
         has_mention = bool(mention and mention in text)
-        directed = user in allowed_users and (has_mention or not require_mention)
+        thread_ts = str(raw.get("thread_ts") or timestamp)
+        is_thread_reply = bool(thread_ts != timestamp)
+        directed = user in allowed_users and (
+            has_mention or not require_mention or (allow_thread_reply and is_thread_reply)
+        )
         request_text = text.replace(mention, "").strip() if mention else text.strip()
         if not request_text:
             return None

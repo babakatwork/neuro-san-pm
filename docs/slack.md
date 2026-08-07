@@ -15,7 +15,8 @@
    `SLACK_ALLOWED_USER_IDS`. Other human messages are visible as ambient
    context but cannot become reply-required requests.
 10. Keep `COLLEAGUE_SLACK_REQUIRE_MENTION=true` unless this is a dedicated DM
-    or bot-only channel.
+    or bot-only channel. Replies inside an existing thread are accepted as
+    directed wake-ups without requiring a bot mention.
 
 For Socket Mode event wake-ups:
 
@@ -23,8 +24,11 @@ For Socket Mode event wake-ups:
 2. Create an app-level token with `connections:write` and store it as
    `SLACK_APP_TOKEN`.
 3. Subscribe to `app_mention`.
-4. Subscribe to `message.im` only if the configured channel is a DM.
-5. Avoid broad ambient `message.channels` subscriptions.
+4. Subscribe to `message.channels` so allowlisted thread replies wake the
+   colleague without a mention.
+5. Subscribe to `message.im` only if the configured channel is a DM.
+6. The bridge still rejects unthreaded, non-mention channel messages and
+   requires the configured channel and user allowlists.
 
 Reinstall the app after changing scopes or event subscriptions.
 

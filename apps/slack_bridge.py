@@ -34,7 +34,10 @@ def is_allowed_event(event: dict[str, Any]) -> bool:
     require_mention, mention_error = read_env_bool("COLLEAGUE_SLACK_REQUIRE_MENTION", True)
     if mention_error:
         return False
-    if not require_mention:
+    timestamp = str(event.get("ts", ""))
+    thread_ts = str(event.get("thread_ts", ""))
+    is_thread_reply = bool(thread_ts and timestamp and thread_ts != timestamp)
+    if not require_mention or is_thread_reply:
         return True
     bot_user_id = os.getenv("SLACK_BOT_USER_ID", "").strip()
     return bool(bot_user_id and f"<@{bot_user_id}>" in str(event.get("text", "")))
@@ -101,12 +104,10 @@ def create_app() -> Any:
             logger.exception("Failed to dispatch allowlisted Slack event")
 
     app.event("app_mention")(handle)
-
-    def handle_direct_message(event: dict[str, Any], body: dict[str, Any], logger: Any) -> None:
-        if event.get("channel_type") in {"im", "mpim"}:
-            handle(event, body, logger)
-
-    app.event("message")(handle_direct_message)
+    # A reply in an allowlisted thread is a directed wake even when the user
+    # does not mention the bot. `claim_event` deduplicates the overlapping
+    # message/app_mention deliveries when a reply does contain a mention.
+    app.event("message")(handle)
     return app
 
 

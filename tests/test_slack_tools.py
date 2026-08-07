@@ -432,3 +432,11 @@ def test_dry_run_cannot_consume_an_unanswered_inbox_batch(monkeypatch, tmp_path)
     assert preview["dry_run"] is True
     assert checkpoint["ok"] is False
     assert "must be delivered" in checkpoint["error"]
+
+
+def test_thread_reply_is_directed_when_authorized_by_socket_event():
+    message = SlackInbox._channel_message(
+        {"user": "U1", "text": "looks good", "ts": "12.35", "thread_ts": "12.34"},
+        {"U1"}, "B1", True, allow_thread_reply=True,
+    )
+    assert message["directed_to_colleague"] is True

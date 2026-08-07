@@ -24,6 +24,21 @@ def test_bridge_allowlist_and_wake_only_payload(monkeypatch):
     assert "private product request" not in payload["user_message"]["text"]
 
 
+
+def test_bridge_accepts_allowlisted_thread_reply_without_mention(monkeypatch):
+    monkeypatch.setenv("SLACK_CHANNEL_ID", "C1")
+    monkeypatch.setenv("SLACK_ALLOWED_USER_IDS", "U1")
+    monkeypatch.setenv("SLACK_BOT_USER_ID", "B1")
+    event = {"channel": "C1", "user": "U1", "text": "looks good, go ahead", "ts": "12.35", "thread_ts": "12.34"}
+    assert is_allowed_event(event) is True
+
+
+def test_bridge_rejects_unthreaded_message_without_mention(monkeypatch):
+    monkeypatch.setenv("SLACK_CHANNEL_ID", "C1")
+    monkeypatch.setenv("SLACK_ALLOWED_USER_IDS", "U1")
+    monkeypatch.setenv("SLACK_BOT_USER_ID", "B1")
+    assert is_allowed_event({"channel": "C1", "user": "U1", "text": "hello", "ts": "12.35"}) is False
+
 def test_bridge_rejects_other_users(monkeypatch):
     monkeypatch.setenv("SLACK_CHANNEL_ID", "C1")
     monkeypatch.setenv("SLACK_ALLOWED_USER_IDS", "U1")

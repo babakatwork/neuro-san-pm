@@ -375,8 +375,10 @@ Then configure event delivery:
    `connections:write`. This is the `xapp-...` value for
    `SLACK_APP_TOKEN`, not the bot token.
 3. Under **Event Subscriptions**, enable events and add the `app_mention` bot
-   event. Add `message.im` only if direct messages should wake the colleague.
-   Socket Mode does not require a public Request URL.
+   event plus `message.channels` so replies in the configured channel can wake
+   the colleague without a bot mention. Add `message.im` only if direct
+   messages should wake the colleague. Socket Mode does not require a public
+   Request URL.
 4. Reinstall the app to the workspace after changing scopes or subscriptions.
 5. Invite `@Colleague` to the configured channel.
 
@@ -627,20 +629,16 @@ make trigger
 
 Confirm that exactly one Slack proposal appears and that GitHub has not changed
 before approval. Reply naturally in that proposal thread—for example, “looks
-good; have the coder take it.” The triage agent interprets the response as
-approval, rejection, or unclear. The host then re-fetches the exact Slack
+good; have the coder take it.” With the Slack bridge running, the thread
+reply itself wakes the next run; `make trigger` is only a deterministic fallback.
+The triage agent interprets the response as approval, rejection, or unclear. The host then re-fetches the exact Slack
 message and independently verifies its channel, thread, timestamp, unexpired
 proposal, and allowlisted human author. If the reply is ambiguous, the agent
 asks one deduplicated clarification in the same thread.
 
-After replying, invoke another cycle:
-
-```bash
-make trigger
-```
-
-Wait for each run to finish before triggering again. A coding run may take up
-to eight minutes. Expected progression:
+Wait for the bridge-driven run to start. If the bridge is not running, invoke
+one fallback cycle with `make trigger`. Wait for each run to finish; a coding
+run may take up to eight minutes. Expected progression:
 
 1. An agentic developer plan is posted on the issue.
 2. The card moves to `In Progress` and the issue is assigned to the coder.

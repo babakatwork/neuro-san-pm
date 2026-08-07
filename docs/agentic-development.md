@@ -121,11 +121,14 @@ Then perform the live canary:
 4. Run `make check`, restart `make run`, and invoke `make trigger`. The Slack
    bridge is optional for this deterministic manual canary.
 5. Confirm exactly one Slack proposal appears and that the issue has not
-   changed. Reply naturally in that thread. The triage agent interprets the
+   changed. With the Slack bridge running, reply naturally in that thread; the
+   reply itself wakes the next run. Use `make trigger` only when testing without
+   the bridge. The triage agent interprets the
    response as approval, rejection, or unclear; the host independently verifies
    the exact message, thread, and allowlisted author before recording a
    decision. If the meaning is unclear, the agent asks one short follow-up.
-6. Trigger again after replying. Observe the issue plan,
+6. Wait for the bridge-driven run (or use one `make trigger` fallback when the
+   bridge is not running). Observe the issue plan,
    In Progress movement, coder assignment, PR creation, implementation/test
    comment, and assignment back to the PM.
 7. For a revision, let the PM comment and reassign the ticket to the coder;
