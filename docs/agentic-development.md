@@ -53,11 +53,12 @@ from `.env.example` and configure:
   access to the public upstream and a same-name fork it owns. It must not have
   upstream Write access. The configuration checker permits the PM and coder
   login to be the same for an initial trial, but emits a warning.
-- `GITHUB_PM_TOKEN` and `GITHUB_CODER_TOKEN`: preferably distinct credentials.
-  The checker and coder boundary permit the same non-empty credential with a
-  warning for an initial trial. The PM token performs issue/PR/Project
-  coordination; the bundled launcher exposes only the coder token to Codex. PM
-  upstream push permission is therefore not a coder-boundary failure.
+- `GITHUB_PM_TOKEN` and `GITHUB_CODER_TOKEN`: use distinct credentials when the
+  PM account can push upstream. The checker permits the same non-empty
+  credential with a warning, but the fork boundary still rejects it if the
+  coder credential has upstream push permission. The PM token performs
+  issue/PR/Project coordination; the bundled launcher exposes only the coder
+  token to Codex.
 - `GITHUB_DELIVERY_HUMAN_REVIEWERS`: comma-separated human GitHub logins. A
   reviewer overlapping the PM or coder is permitted with a warning, but a
   separate human reviewer is strongly recommended.

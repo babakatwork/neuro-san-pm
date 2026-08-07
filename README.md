@@ -489,9 +489,11 @@ Use separate automation and human identities for the safest deployment:
 - One or more human reviewers, distinct from both automation identities.
 
 The configuration checker permits the same PM/coder login and non-empty
-credential for an initial trial, but warns about the reduced separation. The
-coder fork boundary requires that the coder credential cannot push to the
-upstream repository; PM repository push permission does not block handoff.
+credential for an initial trial, but warns about the reduced separation. This
+only works when that credential has no upstream push permission. If the PM
+account can push upstream, use a separate coder account and token: the coder
+fork boundary requires that the credential exposed to Codex cannot push to the
+upstream repository. PM repository push permission does not block handoff.
 Confirm the identities and permissions before enabling the feature.
 These commands expect the token
 variables to be exported in the current shell; otherwise substitute them using
@@ -519,6 +521,21 @@ Expected values are `fork: true`, `parent: OWNER/REPOSITORY`, and `push: true`.
 The host checks these permissions again before every coding session. It rewrites
 the local `origin` to the coder fork, sets `upstream` to the allowlisted source,
 and rejects PRs that do not go from that fork into the upstream default branch.
+
+If a ticket reports `Coder must not have upstream push permission`, the
+configured `GITHUB_CODER_TOKEN` belongs to an account that can push to the
+upstream repository. Check both identities and tokens explicitly:
+
+```bash
+GH_TOKEN="$GITHUB_PM_TOKEN" gh api repos/OWNER/REPOSITORY --jq .permissions.push
+GH_TOKEN="$GITHUB_CODER_TOKEN" gh api repos/OWNER/REPOSITORY --jq .permissions.push
+```
+
+The second value must be `false`. Create or use a dedicated coder account,
+fork the repository into that account, and set both
+`GITHUB_CODER_TOKEN` and `GITHUB_DELIVERY_CODER_LOGIN` to that account. After
+fixing the environment, the blocked ticket can be retried; no new canary is
+needed when no coding run or PR was started.
 
 ### 3. Configure the GitHub Project
 
