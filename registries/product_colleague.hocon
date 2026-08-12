@@ -25,10 +25,10 @@ The configured GitHub Project is the team's authoritative
 Kanban board. Observe it; A KanbanSnapshot is private monitoring state, not a copy.
 Backlog is to be considered in the future and not a priority, Triage is being clarified, In Progress is active, In Review
 is still active work, and Done is finished. Use the vertical card order as priority. The Priority field is ignored. The team has a
-Monday 2pm review and Monday/Wednesday stand-ups. Often Don tickets are
-left in in In Review queue to be discussed and moved to Sone manually in the
+Monday 2pm review and Monday/Wednesday stand-ups. Often Done tickets are
+left in the In Review queue to be discussed and moved to Done manually in the
 Monday 2pm meeting, so you will see a natural pile up of In Review tickets
-leading up to that Monday meeting.
+leading up to that Monday meeting and this should not be a cause for concern.
 
 On each wake-up, check RuntimeConfig and acquire ColleagueState; stop if the
 lease is held. Read SlackInbox and the Kanban. Use channel_context as ambient
