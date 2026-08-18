@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 
 import pytest
@@ -74,7 +75,7 @@ def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, t
     state_tool.invoke({"action": "finish", "run_id": first_run}, {})
     run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
     monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
+    monkeypatch.setenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "owner@example.com,team@example.com")
     recipients = []
     monkeypatch.setattr(
         "coded_tools.colleague.run_finalizer.SlackPost.invoke",
@@ -94,7 +95,7 @@ def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, t
                 "run_id": run_id,
                 "board_snapshot": {"digest": "b" * 64},
                 "slack_update": "A focused product update.",
-                "email_summary": {"subject": "Daily neuro-san summary", "body": "One change."},
+                "email_summary": {"subject": "Weekly neuro-san summary", "body": "One change."},
             },
             {},
         )
@@ -108,11 +109,11 @@ def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, t
     assert result["email_summary"]["recipient_count"] == 2
     assert recipients == ["owner@example.com", "team@example.com"]
     assert state["last_notified_digest"] == "b" * 64
-    assert state["daily_email_pending"] is False
+    assert state["weekly_email_pending"] is False
     assert state["last_email_summary_at"]
 
 
-def test_partial_daily_summary_delivery_remains_pending(monkeypatch, tmp_path):
+def test_partial_weekly_summary_delivery_remains_pending(monkeypatch, tmp_path):
     first_run = _begin(monkeypatch, tmp_path)
     state_tool = ColleagueState()
     state_tool.invoke(
@@ -122,7 +123,7 @@ def test_partial_daily_summary_delivery_remains_pending(monkeypatch, tmp_path):
     state_tool.invoke({"action": "finish", "run_id": first_run}, {})
     run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
     monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
+    monkeypatch.setenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "owner@example.com,team@example.com")
 
     def send(self, args, sly_data):
         del self, sly_data
@@ -136,7 +137,7 @@ def test_partial_daily_summary_delivery_remains_pending(monkeypatch, tmp_path):
             {
                 "run_id": run_id,
                 "board_snapshot": {"digest": "b" * 64},
-                "email_summary": {"subject": "Daily summary", "body": "Changed."},
+                "email_summary": {"subject": "Weekly summary", "body": "Changed."},
             },
             {},
         )
@@ -145,11 +146,11 @@ def test_partial_daily_summary_delivery_remains_pending(monkeypatch, tmp_path):
     state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
     assert result["email_summary"]["delivered"] is False
     assert result["email_summary"]["delivered_count"] == 1
-    assert state["daily_email_pending"] is True
+    assert state["weekly_email_pending"] is True
     assert state["last_email_summary_at"] is None
 
 
-def test_second_change_same_day_remains_pending_without_second_email(monkeypatch, tmp_path):
+def test_second_change_within_week_remains_pending_without_second_email(monkeypatch, tmp_path):
     run_id = _begin(monkeypatch, tmp_path)
     state_tool = ColleagueState()
     state_tool.invoke(
@@ -163,22 +164,60 @@ def test_second_change_same_day_remains_pending_without_second_email(monkeypatch
     )
     state_tool.invoke({"action": "finish", "run_id": run_id}, {})
     run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "owner@example.com")
 
     result = json.loads(
         RunFinalizer().invoke(
             {
                 "run_id": run_id,
                 "board_snapshot": {"digest": "b" * 64},
-                "email_summary": {"subject": "Daily summary", "body": "Changed."},
+                "email_summary": {"subject": "Weekly summary", "body": "Changed."},
             },
             {},
         )
     )
 
-    assert result["email_summary"]["reason"] == "a daily summary was already sent today"
+    assert result["email_summary"]["reason"] == "a weekly summary was sent less than seven days ago"
     state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
-    assert state["daily_email_pending"] is True
+    assert state["weekly_email_pending"] is True
+
+
+def test_pending_change_sends_after_seven_days(monkeypatch, tmp_path):
+    run_id = _begin(monkeypatch, tmp_path)
+    state_tool = ColleagueState()
+    state_tool.invoke(
+        {
+            "action": "checkpoint",
+            "run_id": run_id,
+            "board_snapshot": {"digest": "a" * 64},
+            "weekly_email_pending": True,
+            "last_email_summary_at": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),
+        },
+        {},
+    )
+    state_tool.invoke({"action": "finish", "run_id": run_id}, {})
+    run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
+    monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com")
+    monkeypatch.setenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setattr(
+        "coded_tools.colleague.run_finalizer.GmailSend.invoke",
+        lambda self, args, sly_data: json.dumps({"ok": True, "sent": True, "message_id": "mail-1"}),
+    )
+
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "board_snapshot": {"digest": "a" * 64},
+                "email_summary": {"subject": "Weekly summary", "body": "Changed."},
+            },
+            {},
+        )
+    )
+
+    assert result["email_summary"]["delivered"] is True
+    state = json.loads(state_tool.invoke({"action": "read"}, {}))["state"]
+    assert state["weekly_email_pending"] is False
 
 
 def test_malformed_optional_inputs_do_not_block_email_or_checkpoint(monkeypatch, tmp_path):
@@ -191,7 +230,7 @@ def test_malformed_optional_inputs_do_not_block_email_or_checkpoint(monkeypatch,
     state_tool.invoke({"action": "finish", "run_id": first_run}, {})
     run_id = json.loads(state_tool.invoke({"action": "begin"}, {}))["run_id"]
     monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com")
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com")
+    monkeypatch.setenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "owner@example.com")
     monkeypatch.setattr(
         "coded_tools.colleague.run_finalizer.GmailSend.invoke",
         lambda self, args, sly_data: json.dumps({"ok": True, "sent": True, "message_id": "mail-1"}),
@@ -204,7 +243,7 @@ def test_malformed_optional_inputs_do_not_block_email_or_checkpoint(monkeypatch,
                 "board_snapshot": {"digest": "b" * 64},
                 "request_replies": "not-an-array",
                 "checkpoint_ts": "30.0",
-                "email_summary": {"subject": "Daily summary", "body": "Changed."},
+                "email_summary": {"subject": "Weekly summary", "body": "Changed."},
             },
             {},
         )

@@ -62,7 +62,13 @@ def test_runtime_config_rejects_invalid_public_repository_allowlist(monkeypatch)
     assert "GITHUB_READ_ALLOWED_REPOSITORIES must contain owner/repository names" in result["missing"]
 
 
-def test_runtime_config_reports_daily_summary_readiness_without_recipient(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "recipient_env",
+    ["COLLEAGUE_WEEKLY_SUMMARY_TO", "COLLEAGUE_DAILY_SUMMARY_TO"],
+)
+def test_runtime_config_reports_weekly_summary_readiness_without_recipient(
+    monkeypatch, tmp_path, recipient_env
+):
     set_valid_config(monkeypatch)
     token = tmp_path / "gmail-token.json"
     token.write_text("{}")
@@ -70,13 +76,13 @@ def test_runtime_config_reports_daily_summary_readiness_without_recipient(monkey
     monkeypatch.setenv("COLLEAGUE_GMAIL_WRITE_ENABLED", "true")
     monkeypatch.setenv("GMAIL_TOKEN_PATH", str(token))
     monkeypatch.setenv("GMAIL_ALLOWED_RECIPIENTS", "owner@example.com,team@example.com")
-    monkeypatch.setenv("COLLEAGUE_DAILY_SUMMARY_TO", "owner@example.com,team@example.com")
+    monkeypatch.setenv(recipient_env, "owner@example.com,team@example.com")
 
     raw = RuntimeConfig().invoke({}, {})
     result = json.loads(raw)
 
-    assert result["gmail"]["daily_summary_ready"] is True
-    assert result["gmail"]["daily_summary_recipient_count"] == 2
+    assert result["gmail"]["weekly_summary_ready"] is True
+    assert result["gmail"]["weekly_summary_recipient_count"] == 2
     assert "owner@example.com" not in raw
     assert "team@example.com" not in raw
 

@@ -439,8 +439,8 @@ or duplicate=true.
                         "board_changed": {"type": "boolean"},
                         "notification_pending": {"type": "boolean"},
                         "slack_update_recommended": {"type": "boolean"},
-                        "daily_email_pending": {"type": "boolean"},
-                        "daily_summary_ready": {"type": "boolean"}
+                        "weekly_email_pending": {"type": "boolean"},
+                        "weekly_summary_ready": {"type": "boolean"}
                     },
                     "required": [
                         "kanban_report",
@@ -450,8 +450,8 @@ or duplicate=true.
                         "board_changed",
                         "notification_pending",
                         "slack_update_recommended",
-                        "daily_email_pending",
-                        "daily_summary_ready"
+                        "weekly_email_pending",
+                        "weekly_summary_ready"
                     ]
                 }
             },
@@ -487,8 +487,8 @@ Return a concise structured recommendation containing:
    keyed by its original request ts. This value must always be a JSON array;
    return an empty array when no directed requests were supplied. Answer the
    question directly; ask one focused follow-up when evidence is insufficient.
-3. DAILY_EMAIL: a subject and plain-text body only when a real board change is
-   pending and daily_summary_ready is true. Otherwise omit the draft; never use
+3. WEEKLY_EMAIL: a subject and plain-text body only when a real board change is
+   pending and weekly_summary_ready is true. Otherwise omit the draft; never use
    NONE or null as its subject or body.
 4. NOTES: concise reasoning useful to the colleague. Do not call tools or
    address a destination yourself.

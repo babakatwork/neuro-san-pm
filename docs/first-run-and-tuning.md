@@ -27,8 +27,8 @@ when it chooses silence.
 GitHub access is read-only. The colleague can analyze tickets and recommend
 actions, but it cannot edit tickets, move cards, assign people, or claim that it
 did so. Routine runs do not inspect Gmail. If a real board change is pending and
-daily summary sending is configured, it may draft one email summary; the host
-permits at most one per UTC day.
+weekly summary sending is configured, it may draft one email summary; the host
+permits at most one in any seven-day period.
 
 Run the core server and periodic scheduler with:
 

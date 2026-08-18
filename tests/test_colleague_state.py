@@ -15,7 +15,7 @@ def test_state_lease_checkpoint_and_finish(monkeypatch, tmp_path):
     assert first["report_due"] is True
     assert first["first_contact"] is True
     assert first["slack_update_recommended"] is True
-    assert first["daily_email_pending"] is False
+    assert first["weekly_email_pending"] is False
     run_id = first["run_id"]
 
     overlapping = json.loads(tool.invoke({"action": "begin"}, {}))
@@ -54,6 +54,17 @@ def test_state_rejects_wrong_lease_owner(monkeypatch, tmp_path):
         )
     )
     assert result["ok"] is False
+
+
+def test_state_migrates_pending_daily_summary_to_weekly(monkeypatch, tmp_path):
+    state_path = tmp_path / "colleague.json"
+    state_path.write_text(json.dumps({"daily_email_pending": True}))
+    monkeypatch.setenv("COLLEAGUE_STATE_PATH", str(state_path))
+
+    state = json.loads(ColleagueState().invoke({"action": "read"}, {}))["state"]
+
+    assert state["weekly_email_pending"] is True
+    assert "daily_email_pending" not in state
 
 
 def test_state_rejects_invalid_or_regressing_checkpoints(monkeypatch, tmp_path):

@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from typing import Any
 
@@ -15,7 +16,7 @@ from coded_tools.colleague._runtime import append_audit
 from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague._runtime import utc_now_iso
 from coded_tools.colleague.colleague_state import ColleagueState
-from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients
+from coded_tools.colleague.gmail_recipients import validate_weekly_summary_recipients
 from coded_tools.colleague.gmail_send import GmailSend
 from coded_tools.colleague.slack_post import SlackPost
 
@@ -40,7 +41,7 @@ def _optional_draft(value: object) -> str:
     return "" if text.casefold() in {"none", "null"} else text
 
 
-def _same_utc_day(value: object, now: datetime) -> bool:
+def _sent_within_week(value: object, now: datetime) -> bool:
     if not value:
         return False
     try:
@@ -49,7 +50,7 @@ def _same_utc_day(value: object, now: datetime) -> bool:
         return False
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).date() == now.date()
+    return now - parsed.astimezone(timezone.utc) < timedelta(days=7)
 
 
 def _summary_delivered(value: dict[str, Any]) -> bool:
@@ -82,7 +83,7 @@ class RunFinalizer(CodedTool):
             previous = state.get("board_snapshot")
             previous_digest = str(previous.get("digest", "")) if isinstance(previous, dict) else ""
             board_changed = bool(previous_digest and digest and previous_digest != digest)
-            daily_email_pending = bool(state.get("daily_email_pending")) or board_changed
+            weekly_email_pending = bool(state.get("weekly_email_pending")) or board_changed
             now = datetime.now(timezone.utc)
             now_iso = utc_now_iso()
 
@@ -127,21 +128,22 @@ class RunFinalizer(CodedTool):
 
             email_result: dict[str, Any] = {"skipped": True, "reason": "agent chose no summary"}
             email_summary = args.get("email_summary")
-            summary_recipients, summary_recipient_error = validate_daily_summary_recipients(
-                os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
+            summary_recipients, summary_recipient_error = validate_weekly_summary_recipients(
+                os.getenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "")
+                or os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
                 os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),
             )
-            summary_sent_today = _same_utc_day(state.get("last_email_summary_at"), now)
+            summary_sent_within_week = _sent_within_week(state.get("last_email_summary_at"), now)
             if email_summary is not None:
                 if not isinstance(email_summary, dict):
                     validation_warnings.append("invalid_email_summary_ignored")
                     email_summary = None
-                elif not daily_email_pending:
+                elif not weekly_email_pending:
                     email_result = {"skipped": True, "reason": "no board change is awaiting a summary"}
-                elif summary_sent_today:
-                    email_result = {"skipped": True, "reason": "a daily summary was already sent today"}
+                elif summary_sent_within_week:
+                    email_result = {"skipped": True, "reason": "a weekly summary was sent less than seven days ago"}
                 elif not summary_recipients:
-                    email_result = {"skipped": True, "reason": "COLLEAGUE_DAILY_SUMMARY_TO is not configured"}
+                    email_result = {"skipped": True, "reason": "COLLEAGUE_WEEKLY_SUMMARY_TO is not configured"}
                 elif summary_recipient_error:
                     email_result = {"skipped": True, "reason": summary_recipient_error}
                 else:
@@ -172,12 +174,12 @@ class RunFinalizer(CodedTool):
                         "results": recipient_results,
                     }
                     if _summary_delivered(email_result):
-                        daily_email_pending = False
+                        weekly_email_pending = False
 
             checkpoint_args: dict[str, Any] = {
                 "action": "checkpoint",
                 "run_id": run_id,
-                "daily_email_pending": daily_email_pending,
+                "weekly_email_pending": weekly_email_pending,
             }
             if snapshot is not None:
                 checkpoint_args["board_snapshot"] = snapshot

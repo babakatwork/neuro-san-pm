@@ -96,7 +96,7 @@ flowchart TB
         GmailTools["Gmail search, read, and gated send"]
         Finalizer["RunFinalizer<br/>delivery and checkpoint"]
         SlackPost["SlackPost<br/>fixed channel or thread"]
-        DailyMail["Optional daily email fan-out"]
+        WeeklyMail["Optional weekly email fan-out"]
         State["Checkpoint + lease release"]
         Approval["SlackCoderApproval<br/>verified reply provenance"]
         DeliveryWrite["GitHubDeliveryWrite<br/>approval-bound mutations"]
@@ -113,7 +113,7 @@ flowchart TB
     GmailAgent --> GmailTools
     Colleague --> Finalizer
     Finalizer --> SlackPost
-    Finalizer --> DailyMail
+    Finalizer --> WeeklyMail
     Finalizer --> State
     Triage --> Approval
     Coder --> DeliveryWrite
@@ -219,17 +219,17 @@ the configuration check.
 
 The agent decides whether an unsolicited Slack update is useful. It receives a
 strong suggestion to introduce itself before its first post and another cadence
-hint after 36 hours of silence by default. To enable at-most-daily email
+hint after 36 hours of silence by default. To enable at-most-weekly email
 summaries after real board changes, configure Gmail sending and set
-`COLLEAGUE_DAILY_SUMMARY_TO` to a comma-separated subset of
+`COLLEAGUE_WEEKLY_SUMMARY_TO` to a comma-separated subset of
 `GMAIL_ALLOWED_RECIPIENTS`. Each recipient receives a separate message.
 
 ```dotenv
 GMAIL_ALLOWED_RECIPIENTS=owner@example.com,teammate@example.com
-COLLEAGUE_DAILY_SUMMARY_TO=owner@example.com,teammate@example.com
+COLLEAGUE_WEEKLY_SUMMARY_TO=owner@example.com,teammate@example.com
 ```
 
-Every daily-summary recipient must be in the allowlist. Duplicate addresses are
+Every weekly-summary recipient must be in the allowlist. Duplicate addresses are
 removed, comparison is case-insensitive, and at most 20 recipients are
 accepted.
 
@@ -281,7 +281,7 @@ Google's current end-to-end reference is the
    GMAIL_TOKEN_PATH=.secrets/gmail-token.json
    COLLEAGUE_GMAIL_WRITE_ENABLED=true
    GMAIL_ALLOWED_RECIPIENTS=owner@example.com,teammate@example.com
-   COLLEAGUE_DAILY_SUMMARY_TO=owner@example.com,teammate@example.com
+   COLLEAGUE_WEEKLY_SUMMARY_TO=owner@example.com,teammate@example.com
    ```
 
 9. Run `make check`, then restart the server if these environment values changed.

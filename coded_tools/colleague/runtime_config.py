@@ -14,7 +14,7 @@ from coded_tools.colleague._runtime import read_env_bool
 from coded_tools.colleague.github_public_read import GitHubReadError
 from coded_tools.colleague.github_public_read import allowed_repository_names
 from coded_tools.colleague.gmail_recipients import parse_email_list
-from coded_tools.colleague.gmail_recipients import validate_daily_summary_recipients
+from coded_tools.colleague.gmail_recipients import validate_weekly_summary_recipients
 
 
 class RuntimeConfig(CodedTool):
@@ -74,8 +74,9 @@ class RuntimeConfig(CodedTool):
         github_write_enabled, github_write_error = read_env_bool("GITHUB_DELIVERY_WRITE_ENABLED", False)
         gmail_token_path = Path(os.getenv("GMAIL_TOKEN_PATH", ".secrets/gmail-token.json"))
         gmail_allowed = set(parse_email_list(os.getenv("GMAIL_ALLOWED_RECIPIENTS", "")))
-        daily_summary_recipients, daily_summary_error = validate_daily_summary_recipients(
-            os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
+        weekly_summary_recipients, weekly_summary_error = validate_weekly_summary_recipients(
+            os.getenv("COLLEAGUE_WEEKLY_SUMMARY_TO", "")
+            or os.getenv("COLLEAGUE_DAILY_SUMMARY_TO", ""),
             os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),
         )
 
@@ -194,11 +195,11 @@ class RuntimeConfig(CodedTool):
                 "read_ready": gmail_enabled and gmail_token_path.is_file(),
                 "write_enabled": gmail_write_enabled,
                 "allowed_recipient_count": len(gmail_allowed),
-                "daily_summary_configured": bool(daily_summary_recipients),
-                "daily_summary_recipient_count": len(daily_summary_recipients),
-                "daily_summary_ready": bool(
-                    daily_summary_recipients
-                    and daily_summary_error is None
+                "weekly_summary_configured": bool(weekly_summary_recipients),
+                "weekly_summary_recipient_count": len(weekly_summary_recipients),
+                "weekly_summary_ready": bool(
+                    weekly_summary_recipients
+                    and weekly_summary_error is None
                     and gmail_enabled
                     and gmail_write_enabled
                     and gmail_token_path.is_file()

@@ -31,7 +31,7 @@ DEFAULT_STATE: dict[str, Any] = {
     "last_slack_ts": "0",
     "last_report_at": None,
     "last_notified_digest": None,
-    "daily_email_pending": False,
+    "weekly_email_pending": False,
     "last_email_summary_at": None,
     "run": None,
 }
@@ -69,6 +69,8 @@ class ColleagueState(CodedTool):
 
     def _load(self) -> dict[str, Any]:
         state = read_json(self._path(), DEFAULT_STATE)
+        if "weekly_email_pending" not in state and "daily_email_pending" in state:
+            state["weekly_email_pending"] = bool(state.pop("daily_email_pending"))
         for key, value in DEFAULT_STATE.items():
             state.setdefault(key, value)
         return state
@@ -106,7 +108,7 @@ class ColleagueState(CodedTool):
             report_due=self._report_due(state),
             first_contact=not bool(state.get("last_report_at")),
             slack_update_recommended=self._report_due(state),
-            daily_email_pending=bool(state.get("daily_email_pending")),
+            weekly_email_pending=bool(state.get("weekly_email_pending")),
             state=state,
         )
 
@@ -135,7 +137,7 @@ class ColleagueState(CodedTool):
             "last_slack_ts": str,
             "last_report_at": str,
             "last_notified_digest": str,
-            "daily_email_pending": bool,
+            "weekly_email_pending": bool,
             "last_email_summary_at": str,
         }
         with exclusive_file_lock(self._path()):

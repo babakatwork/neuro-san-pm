@@ -15,7 +15,7 @@
                     "text": """
 Scheduled product-management heartbeat. Inspect the configured GitHub Project,
 process any new allowlisted Slack requests, and report only material changes,
-blockers, or a due daily digest. Do not emit a routine message every run.
+blockers, or a due weekly digest. Do not emit a routine message every run.
 """,
                     "metadata": {
                         "user_id": "system"
