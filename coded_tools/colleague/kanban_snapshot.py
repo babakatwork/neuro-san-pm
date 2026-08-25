@@ -17,6 +17,7 @@ from coded_tools.colleague._runtime import json_result
 
 DONE_STATUSES = {"closed", "complete", "completed", "done", "shipped"}
 MAX_ATTENTION_ITEMS = 20
+MAX_ORDERED_ITEMS_PER_COLUMN = 20
 
 
 class KanbanSnapshot(CodedTool):
@@ -34,7 +35,7 @@ class KanbanSnapshot(CodedTool):
         if len(raw_items) > max_items:
             return json_result(ok=False, error=f"items exceeds the configured {max_items} item safety limit")
         items = [self._normalize(item) for item in raw_items if isinstance(item, dict)]
-        items.sort(key=lambda item: (item["id"], item["title"]))
+        items.sort(key=self._project_order_key)
         canonical = {
             "project_title": str(args.get("project_title", ""))[:300],
             "project_url": str(args.get("project_url", ""))[:1000],
@@ -56,6 +57,7 @@ class KanbanSnapshot(CodedTool):
             for item in items
             if "block" in item["status"].lower() or any("block" in label.lower() for label in item["labels"])
         ]
+        ordered_columns = self._ordered_columns(items)
         snapshot = {
             "project_title": canonical["project_title"],
             "project_url": canonical["project_url"],
@@ -64,6 +66,7 @@ class KanbanSnapshot(CodedTool):
             "status_counts": status_counts,
             "priority_counts": priority_counts,
             "missing_assignee_count": sum(not item["assignees"] for item in items),
+            "ordered_columns": ordered_columns,
             "attention": {
                 "blocked": blocked[:MAX_ATTENTION_ITEMS],
                 "blocked_count": len(blocked),
@@ -84,6 +87,8 @@ class KanbanSnapshot(CodedTool):
         url = str(item.get("url", ""))[:1000]
         identity = str(item.get("id") or url or title)[:1000]
         status = str(item.get("status") or "No status")[:200]
+        raw_position = item.get("project_position")
+        project_position = raw_position if isinstance(raw_position, int) and raw_position > 0 else None
         return {
             "id": identity,
             "type": str(item.get("type", "Issue"))[:100],
@@ -92,10 +97,48 @@ class KanbanSnapshot(CodedTool):
             "url": url,
             "status": status,
             "priority": str(item.get("priority", ""))[:200],
+            "project_position": project_position,
             "assignees": KanbanSnapshot._string_list(item.get("assignees")),
             "labels": KanbanSnapshot._string_list(item.get("labels")),
             "updated_at": str(item.get("updated_at", ""))[:100],
         }
+
+    @staticmethod
+    def _project_order_key(item: dict[str, Any]) -> tuple[int, int, str, str]:
+        """Keep the GitHub project position, with deterministic fallback for legacy input."""
+        position = item.get("project_position")
+        if isinstance(position, int):
+            return (0, position, item["id"], item["title"])
+        return (1, 0, item["id"], item["title"])
+
+    @staticmethod
+    def _ordered_columns(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Expose a bounded top-of-column view while preserving full-board order in the digest."""
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for item in items:
+            grouped.setdefault(item["status"], []).append(item)
+
+        columns: dict[str, dict[str, Any]] = {}
+        for status in sorted(grouped):
+            column_items = grouped[status]
+            visible = []
+            for rank, item in enumerate(column_items[:MAX_ORDERED_ITEMS_PER_COLUMN], start=1):
+                visible.append(
+                    {
+                        "rank": rank,
+                        "project_position": item["project_position"],
+                        "type": item["type"],
+                        "number": item["number"],
+                        "title": item["title"],
+                        "url": item["url"],
+                    }
+                )
+            columns[status] = {
+                "item_count": len(column_items),
+                "items": visible,
+                "truncated": len(column_items) > MAX_ORDERED_ITEMS_PER_COLUMN,
+            }
+        return columns
 
     @staticmethod
     def _is_stale(item: dict[str, Any], stale_after_days: int) -> bool:

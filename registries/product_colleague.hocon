@@ -534,6 +534,9 @@ leading up to that Monday meeting and this should not be a cause for concern.
 
 Priority is the physical top-to-bottom order within each individual column, not
 the ticket Priority field. The field is intentionally empty and must be ignored;
+the snapshot's ordered_columns entries preserve that physical order, with rank 1
+representing the top and therefore highest-priority card in the column. Each
+column is bounded to its first 20 cards and reports whether the list is truncated.
 
 As an expert and experienced product manager, use your judgement given the state of the
 kanban board and the discussions in the channel, and return your summary observations and advice.

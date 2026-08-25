@@ -31,6 +31,7 @@ def test_snapshot_is_deterministic_and_surfaces_attention(monkeypatch):
     assert first["priority_counts"] == {"No priority": 3}
     assert first["missing_assignee_count"] == 3
     assert "items" not in first
+    assert [item["title"] for item in first["ordered_columns"]["Blocked"]["items"]] == ["Blocked work"]
     assert first["attention"]["missing_status_count"] == 1
     assert first["attention"]["blocked_count"] == 1
     assert first["attention"]["stale_count"] == 1
@@ -52,3 +53,22 @@ def test_snapshot_rejects_invalid_stale_policy(monkeypatch):
 
     assert result["ok"] is False
     assert "positive integer" in result["error"]
+
+
+def test_snapshot_preserves_column_order_and_reordering_changes_digest(monkeypatch):
+    monkeypatch.setenv("COLLEAGUE_STALE_AFTER_DAYS", "14")
+    items = [
+        {"id": "a", "number": 101, "title": "First", "status": "To Do", "project_position": 4},
+        {"id": "b", "number": 102, "title": "Second", "status": "To Do", "project_position": 9},
+        {"id": "c", "number": 103, "title": "Active", "status": "In Progress", "project_position": 6},
+    ]
+
+    first = json.loads(KanbanSnapshot().invoke({"items": items}, {}))["snapshot"]
+    reordered = [dict(item) for item in items]
+    reordered[0]["project_position"], reordered[1]["project_position"] = 9, 4
+    second = json.loads(KanbanSnapshot().invoke({"items": reordered}, {}))["snapshot"]
+
+    assert [item["number"] for item in first["ordered_columns"]["To Do"]["items"]] == ["101", "102"]
+    assert [item["rank"] for item in first["ordered_columns"]["To Do"]["items"]] == [1, 2]
+    assert [item["number"] for item in second["ordered_columns"]["To Do"]["items"]] == ["102", "101"]
+    assert first["digest"] != second["digest"]

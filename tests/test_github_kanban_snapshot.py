@@ -51,6 +51,9 @@ def test_composite_tool_compacts_large_board_before_returning(monkeypatch, tmp_p
     assert snapshot["missing_assignee_count"] == 1
     assert snapshot["attention"]["blocked_count"] == 1
     assert snapshot["attention"]["blocked"][0]["id"] == "item-000"
+    assert snapshot["ordered_columns"]["Backlog"]["item_count"] == 354
+    assert len(snapshot["ordered_columns"]["Backlog"]["items"]) == 20
+    assert snapshot["ordered_columns"]["Backlog"]["truncated"] is True
     assert "items" not in snapshot
     assert "Routine item 354" not in raw
     assert len(raw) < 20_000

@@ -32,7 +32,11 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
       number
       title
       url
-      items(first: $pageSize, after: $cursor) {
+      items(
+        first: $pageSize
+        after: $cursor
+        orderBy: {field: POSITION, direction: ASC}
+      ) {
         pageInfo {
           hasNextPage
           endCursor
@@ -228,7 +232,7 @@ class GitHubProjectReader(CodedTool):
             for node in nodes:
                 if not isinstance(node, dict):
                     raise _ReaderError("invalid_response", "GitHub GraphQL returned an invalid project item")
-                items.append(cls._normalize_item(node))
+                items.append(cls._normalize_item(node, project_position=len(items) + 1))
                 if len(items) > config.max_items:
                     raise _ReaderError(
                         "item_limit", f"The configured GitHub Project exceeds the {config.max_items} item limit"
@@ -307,7 +311,7 @@ class GitHubProjectReader(CodedTool):
         return project
 
     @classmethod
-    def _normalize_item(cls, node: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_item(cls, node: dict[str, Any], *, project_position: int) -> dict[str, Any]:
         content = node.get("content")
         if content is not None and not isinstance(content, dict):
             raise _ReaderError("invalid_response", "GitHub GraphQL returned an invalid project item")
@@ -334,6 +338,7 @@ class GitHubProjectReader(CodedTool):
             "url": cls._bounded_string(content.get("url"), 1000),
             "status": status[:200],
             "priority": priority[:200],
+            "project_position": project_position,
             "assignees": assignees,
             "labels": labels,
             "updated_at": cls._bounded_string(content.get("updatedAt") or node.get("updatedAt"), 100),

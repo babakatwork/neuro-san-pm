@@ -122,6 +122,7 @@ def test_reader_uses_only_fixed_env_and_paginates_normalized_items(monkeypatch, 
         "labels": ["priority", "runtime"],
         "number": "839",
         "priority": "P1",
+        "project_position": 1,
         "repository": "cognizant-ai-lab/neuro-san",
         "status": "In progress",
         "title": "Event invocation",
@@ -130,6 +131,7 @@ def test_reader_uses_only_fixed_env_and_paginates_normalized_items(monkeypatch, 
         "url": "https://github.com/cognizant-ai-lab/neuro-san/issues/839",
     }
     assert result["items"][1]["status"] == "No status"
+    assert result["items"][1]["project_position"] == 2
     assert result["items"][1]["assignees"] == ["owner"]
     assert result["items"][1]["url"] == ""
 
@@ -139,6 +141,7 @@ def test_reader_uses_only_fixed_env_and_paginates_normalized_items(monkeypatch, 
         assert url == GRAPHQL_URL
         assert payload["operationName"] == "ReadConfiguredProject"
         assert "mutation" not in payload["query"].lower()
+        assert "orderBy: {field: POSITION, direction: ASC}" in payload["query"]
         assert "organization(login: $owner)" in payload["query"]
         assert "user(login: $owner)" not in payload["query"]
         assert payload["variables"]["owner"] == "cognizant-ai-lab"
