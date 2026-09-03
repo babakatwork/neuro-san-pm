@@ -31,6 +31,12 @@ directed analytical questions the same analyst can call the fixed Project reader
 and receive the complete normalized item array. The MCP entries remain templates
 for future networks that add an equivalent validating boundary.
 
+Normalization is only a convenience path, not a visibility boundary. Query-only
+GraphQL and GET-only REST coded tools return raw GitHub responses for fields the
+specialized readers did not anticipate. Their clients contain no mutation,
+PATCH, PUT, or DELETE capability; the GraphQL transport POST rejects any
+document containing a mutation or subscription operation.
+
 For ticket bodies, PRs, and focused source inspection, the network now uses a
 small GET-only GitHub REST client instead of handing raw MCP tools to the front
 agent. `GitHubAssistant` is an intermediate coordinator over the existing

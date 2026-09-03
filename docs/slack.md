@@ -47,13 +47,16 @@ request at-most-once reply semantics for 30 days: a later run does not show an
 answered request to the agent, and the posting boundary rejects a second answer
 even when its wording differs. Unanswered requests remain eligible for retry.
 
-Messages are capped at 3,500 characters. Exact messages to the same channel and
-thread are suppressed for `COLLEAGUE_SLACK_DEDUPE_SECONDS` (six hours by
-default). Model-produced angle brackets are escaped, Slack formatting is
-disabled, and link/media unfurls are disabled, so ticket text cannot create a
-mass mention or attacker-controlled preview. Outbound delivery is disabled
-unless `COLLEAGUE_SLACK_WRITE_ENABLED=true`. A dry-run preview does not mark a
-request delivered, so ColleagueState refuses to consume its inbox checkpoint.
+Each Slack message is capped at 3,500 characters. RunFinalizer automatically
+splits longer directed answers into numbered, ordered thread messages and marks
+the request delivered only after the final part succeeds. Exact messages to the
+same channel and thread are suppressed for `COLLEAGUE_SLACK_DEDUPE_SECONDS` (six
+hours by default), so an interrupted multipart reply can safely retry accepted
+parts. Model-produced angle brackets are escaped, Slack formatting is disabled,
+and link/media unfurls are disabled, so ticket text cannot create a mass mention
+or attacker-controlled preview. Outbound delivery is disabled unless
+`COLLEAGUE_SLACK_WRITE_ENABLED=true`. A dry-run preview does not mark a request
+delivered, so ColleagueState refuses to consume its inbox checkpoint.
 
 Fixed lifecycle notices are separately gated by
 `COLLEAGUE_SLACK_AVAILABILITY_ENABLED`, which defaults to `false`. Leave it

@@ -56,6 +56,7 @@ def issue_node():
             "number": 839,
             "title": "Event invocation",
             "url": "https://github.com/cognizant-ai-lab/neuro-san/issues/839",
+            "createdAt": "2026-07-01T08:00:00Z",
             "updatedAt": "2026-07-11T09:30:00Z",
             "repository": {"nameWithOwner": "cognizant-ai-lab/neuro-san"},
             "assignees": {
@@ -80,6 +81,7 @@ def draft_node():
             "__typename": "DraftIssue",
             "id": "DI_draft",
             "title": "Plan the next milestone",
+            "createdAt": "2026-07-02T08:00:00Z",
             "updatedAt": "2026-07-11T10:00:00Z",
             "assignees": {"totalCount": 1, "nodes": [{"login": "owner"}]},
         },
@@ -118,6 +120,7 @@ def test_reader_uses_only_fixed_env_and_paginates_normalized_items(monkeypatch, 
     assert result["item_count"] == 2
     assert result["items"][0] == {
         "assignees": ["amy", "zoe"],
+        "created_at": "2026-07-01T08:00:00Z",
         "id": "PVTI_issue",
         "labels": ["priority", "runtime"],
         "number": "839",
@@ -133,6 +136,7 @@ def test_reader_uses_only_fixed_env_and_paginates_normalized_items(monkeypatch, 
     assert result["items"][1]["status"] == "No status"
     assert result["items"][1]["project_position"] == 2
     assert result["items"][1]["assignees"] == ["owner"]
+    assert result["items"][1]["created_at"] == "2026-07-02T08:00:00Z"
     assert result["items"][1]["url"] == ""
 
     assert len(calls) == 2

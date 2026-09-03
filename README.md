@@ -345,9 +345,10 @@ The token's GitHub permissions define the readable scope. To narrow that scope,
 replace `*` with comma-separated `owner/repository` names. Private data is
 returned only when the token can read it. Directed Project questions can use the
 complete normalized item array for arbitrary filtering, grouping, counting,
-sorting, and comparison. Reads remain operationally bounded: one issue or PR at
-a time, at most 100 changed files, a 5,000-entry tree, and 100 KB per text file.
-Normal periodic board checks use the compact snapshot and do not automatically
+sorting, and comparison. When a normalized reader does not include a requested
+field, query-only GraphQL and GET-only REST tools can request it directly and
+return GitHub's raw response without an application field whitelist. Normal
+periodic board checks still use the compact snapshot and do not automatically
 scan source repositories.
 
 [`mcp/mcp_info.hocon`](mcp/mcp_info.hocon) also records explicit hosted

@@ -52,7 +52,9 @@ rankings, and bounded card fields. Directed analysis can read the complete
 normalized Project item array. Ticket, PR, and source reads are delegated to
 scoped agents behind a token-scoped GET-only client and response-size limits;
 an optional repository allowlist can narrow this. Private repositories are
-readable when the token permits it. Neither path exposes a GitHub write operation.
+readable when the token permits it. For fields outside the convenience schemas,
+query-only GraphQL and GET-only REST readers return the raw GitHub response.
+Neither path exposes a GitHub write operation.
 
 A future action such as editing an issue, moving a Project item, sending email,
 or operating a signed-in browser should be a new narrow tool with:

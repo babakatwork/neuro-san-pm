@@ -64,7 +64,14 @@ def test_snapshot_rejects_invalid_stale_policy(monkeypatch):
 def test_snapshot_preserves_column_order_and_reordering_changes_digest(monkeypatch):
     monkeypatch.setenv("COLLEAGUE_STALE_AFTER_DAYS", "14")
     items = [
-        {"id": "a", "number": 101, "title": "First", "status": "To Do", "project_position": 4},
+        {
+            "id": "a",
+            "number": 101,
+            "title": "First",
+            "status": "To Do",
+            "project_position": 4,
+            "created_at": "2026-01-01T00:00:00Z",
+        },
         {"id": "b", "number": 102, "title": "Second", "status": "To Do", "project_position": 9},
         {"id": "c", "number": 103, "title": "Active", "status": "In Progress", "project_position": 6},
     ]
@@ -76,6 +83,7 @@ def test_snapshot_preserves_column_order_and_reordering_changes_digest(monkeypat
 
     assert [item["number"] for item in first["ordered_columns"]["To Do"]["items"]] == ["101", "102"]
     assert [item["rank"] for item in first["ordered_columns"]["To Do"]["items"]] == [1, 2]
+    assert first["ordered_columns"]["To Do"]["items"][0]["created_at"] == "2026-01-01T00:00:00Z"
     assert [item["number"] for item in second["ordered_columns"]["To Do"]["items"]] == ["102", "101"]
     assert first["digest"] != second["digest"]
 

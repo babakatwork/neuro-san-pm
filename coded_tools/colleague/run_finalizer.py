@@ -20,6 +20,8 @@ from coded_tools.colleague.gmail_recipients import validate_weekly_summary_recip
 from coded_tools.colleague.gmail_send import GmailSend
 from coded_tools.colleague.slack_post import SlackPost
 
+SLACK_REPLY_CHUNK_BODY_CHARS = 3400
+
 
 def _result(raw: str) -> dict[str, Any]:
     value = json.loads(raw)
@@ -29,7 +31,7 @@ def _result(raw: str) -> dict[str, Any]:
 
 
 def _delivered(value: dict[str, Any]) -> bool:
-    return bool(value.get("sent") or value.get("duplicate"))
+    return bool(value.get("delivered") or value.get("sent") or value.get("duplicate"))
 
 
 def _text(value: object) -> str:
@@ -55,6 +57,80 @@ def _sent_within_week(value: object, now: datetime) -> bool:
 
 def _summary_delivered(value: dict[str, Any]) -> bool:
     return bool(value.get("delivered"))
+
+
+def _split_reply_text(text: str) -> list[str]:
+    """Split a long directed reply into bounded, readable Slack messages."""
+    if len(text) <= 3500:
+        return [text]
+
+    remaining = text
+    bodies: list[str] = []
+    while remaining:
+        if len(remaining) <= SLACK_REPLY_CHUNK_BODY_CHARS:
+            bodies.append(remaining)
+            break
+        cut = remaining.rfind("\n", 0, SLACK_REPLY_CHUNK_BODY_CHARS + 1)
+        if cut < SLACK_REPLY_CHUNK_BODY_CHARS // 2:
+            cut = remaining.rfind(" ", 0, SLACK_REPLY_CHUNK_BODY_CHARS + 1)
+        if cut <= 0:
+            cut = SLACK_REPLY_CHUNK_BODY_CHARS
+        bodies.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:]
+        if remaining.startswith("\n") or remaining.startswith(" "):
+            remaining = remaining[1:]
+
+    count = len(bodies)
+    return [f"Part {index} of {count}\n{body}" for index, body in enumerate(bodies, start=1)]
+
+
+def _deliver_request_reply(
+    *,
+    run_id: str,
+    inbox_batch_id: str,
+    request_ts: str,
+    text: str,
+) -> dict[str, Any]:
+    parts = _split_reply_text(text)
+    results: list[dict[str, Any]] = []
+    for index, part in enumerate(parts, start=1):
+        result = _result(
+            SlackPost().invoke(
+                {
+                    "run_id": run_id,
+                    "text": part,
+                    "inbox_batch_id": inbox_batch_id,
+                    "reply_to_ts": request_ts,
+                    "final_reply": index == len(parts),
+                },
+                {},
+            )
+        )
+        result["part_index"] = index
+        results.append(result)
+        if result.get("reason") == "request_already_answered":
+            return {
+                "ok": True,
+                "sent": False,
+                "duplicate": True,
+                "delivered": True,
+                "part_count": len(parts),
+                "attempted_part_count": len(results),
+                "parts": results,
+            }
+        if not result.get("ok"):
+            break
+
+    delivered = len(results) == len(parts) and all(_delivered(result) for result in results)
+    return {
+        "ok": all(bool(result.get("ok")) for result in results),
+        "sent": any(bool(result.get("sent")) for result in results),
+        "duplicate": delivered and all(bool(result.get("duplicate")) for result in results),
+        "delivered": delivered,
+        "part_count": len(parts),
+        "attempted_part_count": len(results),
+        "parts": results,
+    }
 
 
 class RunFinalizer(CodedTool):
@@ -113,16 +189,11 @@ class RunFinalizer(CodedTool):
                 request_ts = _text(reply.get("request_ts"))
                 text = _optional_draft(reply.get("text"))
                 reply_results.append(
-                    _result(
-                        SlackPost().invoke(
-                            {
-                                "run_id": run_id,
-                                "text": text,
-                                "inbox_batch_id": inbox_batch_id,
-                                "reply_to_ts": request_ts,
-                            },
-                            {},
-                        )
+                    _deliver_request_reply(
+                        run_id=run_id,
+                        inbox_batch_id=inbox_batch_id,
+                        request_ts=request_ts,
+                        text=text,
                     )
                 )
 

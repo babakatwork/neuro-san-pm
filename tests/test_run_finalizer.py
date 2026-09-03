@@ -65,6 +65,39 @@ def test_null_or_sentinel_slack_update_is_silent(monkeypatch, tmp_path, slack_up
     assert result["slack_update"] == {"skipped": True, "reason": "agent chose no update"}
 
 
+def test_long_directed_reply_is_delivered_in_ordered_chunks(monkeypatch, tmp_path):
+    run_id = _begin(monkeypatch, tmp_path)
+    batch_id = create_batch(run_id, "20.0", [])
+    calls = []
+
+    def post(self, args, sly_data):
+        del self, sly_data
+        calls.append(args)
+        return json.dumps({"ok": True, "sent": True, "message_ts": f"30.{len(calls)}"})
+
+    monkeypatch.setattr("coded_tools.colleague.run_finalizer.SlackPost.invoke", post)
+    lines = [f"{index}. 2026-01-01 ticket {index} " + ("x" * 60) for index in range(1, 131)]
+    result = json.loads(
+        RunFinalizer().invoke(
+            {
+                "run_id": run_id,
+                "inbox_batch_id": batch_id,
+                "checkpoint_ts": "20.0",
+                "request_replies": [{"request_ts": "10.0", "text": "\n".join(lines)}],
+            },
+            {},
+        )
+    )
+
+    reply = result["request_replies"][0]
+    assert reply["delivered"] is True
+    assert reply["part_count"] == len(calls) > 1
+    assert all(len(call["text"]) <= 3500 for call in calls)
+    assert [call["final_reply"] for call in calls] == [False] * (len(calls) - 1) + [True]
+    assert all(call["text"].startswith(f"Part {index} of {len(calls)}\n") for index, call in enumerate(calls, 1))
+    assert result["inbox_checkpoint"]["ok"] is True
+
+
 def test_chosen_slack_update_and_changed_board_email_are_recorded(monkeypatch, tmp_path):
     first_run = _begin(monkeypatch, tmp_path)
     state_tool = ColleagueState()

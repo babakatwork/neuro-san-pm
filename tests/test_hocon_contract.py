@@ -44,7 +44,7 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     analyst = tools["KanbanAnalyst"]
     snapshot = tools["GitHubKanbanSnapshot"]
     full_reader = tools["GitHubProjectReader"]
-    assert analyst["tools"] == ["GitHubKanbanSnapshot", "GitHubProjectReader"]
+    assert analyst["tools"] == ["GitHubKanbanSnapshot", "GitHubProjectReader", "GitHubGraphQLRead"]
     assert snapshot["name"] == "GitHubKanbanSnapshot"
     assert full_reader["function"]["parameters"]["properties"]["request"]["enum"] == [
         "read_configured_project"
@@ -54,7 +54,7 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     assert "existing authoritative Kanban board" in analyst["instructions"]
     assert "Never recommend" in analyst["instructions"]
     assert "snapshot you produce is only internal monitoring state" in analyst["instructions"]
-    assert "bounded attention items instead of every card" in analyst["instructions"]
+    assert "compact snapshot deliberately exposes aggregate" in analyst["instructions"]
     assert "physical top-to-bottom order" in analyst["instructions"]
     assert "Priority field" in analyst["instructions"]
     assert "must be ignored" in analyst["instructions"]
@@ -107,15 +107,19 @@ def test_token_scoped_github_readers_are_reachable_only_through_scoped_agents(mo
         "TicketReader",
         "PullRequestReviewer",
         "RepositoryCodeReviewer",
+        "GitHubGraphQLRead",
+        "GitHubRestRead",
     ]
-    assert tools["TicketReader"]["tools"] == ["GitHubIssueRead", "PullRequestReviewer"]
+    assert tools["TicketReader"]["tools"] == ["GitHubIssueRead", "GitHubRestRead", "PullRequestReviewer"]
     assert tools["PullRequestReviewer"]["tools"] == [
         "GitHubPullRequestRead",
+        "GitHubRestRead",
         "RepositoryCodeReviewer",
     ]
     assert tools["RepositoryCodeReviewer"]["tools"] == [
         "GitHubRepositoryTree",
         "GitHubFileRead",
+        "GitHubRestRead",
     ]
     assert "GitHubAssistant" in frontman["tools"]
     assert not {"KanbanAnalyst", "TicketReader", "PullRequestReviewer", "RepositoryCodeReviewer"} & set(
@@ -132,6 +136,9 @@ def test_token_scoped_github_readers_are_reachable_only_through_scoped_agents(mo
         assert tools[name]["class"].startswith("coded_tools.colleague.github_public_read.")
     assert "public or private repository" in tools["GitHubAssistant"]["instructions"]
     assert "public and private repositories are supported" in tools["TicketReader"]["instructions"]
+    assert tools["GitHubGraphQLRead"]["class"].endswith("github_unrestricted_read.GitHubGraphQLRead")
+    assert tools["GitHubRestRead"]["class"].endswith("github_unrestricted_read.GitHubRestRead")
+    assert "raw, unfiltered response" in tools["GitHubGraphQLRead"]["function"]["description"]
 
 
 def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):
@@ -163,6 +170,9 @@ def test_top_agent_has_autonomy_but_finalizes_through_one_host_boundary(monkeypa
     assert "Conclude every acquired run" in frontman["instructions"]
     assert tools["ColleagueState"]["function"]["parameters"]["properties"]["action"]["enum"] == ["begin"]
     assert finalizer["class"].endswith("run_finalizer.RunFinalizer")
+    reply_schema = finalizer["function"]["parameters"]["properties"]["request_replies"]["items"]
+    assert "maxLength" not in reply_schema["properties"]["text"]
+    assert "safely\nsplits long replies" in frontman["instructions"]
     assert advisor["tools"] == []
     assert "no tools and no side-effect authority" in advisor["instructions"]
     assert "SlackPost" not in advisor["tools"]

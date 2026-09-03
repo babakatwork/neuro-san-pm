@@ -105,6 +105,7 @@ class KanbanSnapshot(CodedTool):
             "project_position": project_position,
             "assignees": KanbanSnapshot._string_list(item.get("assignees")),
             "labels": KanbanSnapshot._string_list(item.get("labels")),
+            "created_at": str(item.get("created_at", ""))[:100],
             "updated_at": str(item.get("updated_at", ""))[:100],
         }
 
@@ -138,6 +139,7 @@ class KanbanSnapshot(CodedTool):
                         "title": item["title"],
                         "url": item["url"],
                         "assignees": item["assignees"],
+                        "created_at": item["created_at"],
                     }
                 )
             columns[status] = {

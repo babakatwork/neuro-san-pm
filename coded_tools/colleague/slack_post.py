@@ -46,12 +46,15 @@ class SlackPost(CodedTool):
         inbox_batch_id = inbox_batch_id.strip() if isinstance(inbox_batch_id, str) else ""
         reply_to_ts = args.get("reply_to_ts", "")
         reply_to_ts = reply_to_ts.strip() if isinstance(reply_to_ts, str) else ""
+        final_reply = args.get("final_reply", True)
         if not channel:
             return json_result(ok=False, sent=False, error="SLACK_CHANNEL_ID is not configured")
         if not text or text.casefold() in {"none", "null"}:
             return json_result(ok=False, sent=False, error="text is required")
         if len(text) > 3500:
             return json_result(ok=False, sent=False, error="text exceeds the 3500 character safety limit")
+        if not isinstance(final_reply, bool):
+            return json_result(ok=False, sent=False, error="final_reply must be a boolean")
         if not has_active_lease(run_id):
             return json_result(ok=False, sent=False, error="run_id does not own an active colleague lease")
         if bool(inbox_batch_id) != bool(reply_to_ts):
@@ -123,7 +126,7 @@ class SlackPost(CodedTool):
                 }
                 delivery["sent"] = sent
                 if fingerprint in sent:
-                    if inbox_batch_id:
+                    if inbox_batch_id and final_reply:
                         mark_request_answered(channel, reply_to_ts)
                         mark_delivered(inbox_batch_id, run_id, reply_to_ts)
                     append_audit("slack_post", sent=False, duplicate=True, message_sha256=fingerprint)
@@ -141,7 +144,7 @@ class SlackPost(CodedTool):
                 body = SlackApiClient(token).call("chat.postMessage", http_method="POST", payload=payload)
                 sent[fingerprint] = now
                 atomic_write_json(delivery_path, delivery)
-            if inbox_batch_id:
+            if inbox_batch_id and final_reply:
                 message_ts = str(body.get("ts", ""))
                 try:
                     mark_request_answered(channel, reply_to_ts, message_ts)

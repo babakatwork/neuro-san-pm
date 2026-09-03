@@ -12,6 +12,7 @@ from coded_tools.colleague.slack_inbox import SlackInbox
 from coded_tools.colleague.slack_inbox_batch import create_batch
 from coded_tools.colleague.slack_post import SlackPost
 from coded_tools.colleague.slack_reply_ledger import mark_request_answered
+from coded_tools.colleague.slack_reply_ledger import request_was_answered
 
 
 def set_slack_config(monkeypatch, tmp_path):
@@ -356,6 +357,68 @@ def test_slack_post_never_answers_the_same_request_twice(monkeypatch, tmp_path):
     assert second["duplicate"] is True
     assert second["reason"] == "request_already_answered"
     assert len(calls) == 1
+
+
+def test_slack_post_marks_multipart_request_only_after_final_part(monkeypatch, tmp_path):
+    set_slack_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("COLLEAGUE_SLACK_WRITE_ENABLED", "true")
+    calls = []
+
+    def fake_call(self, method, *, http_method, payload):
+        del self, method, http_method
+        calls.append(payload)
+        return {"ok": True, "ts": f"20.{len(calls)}"}
+
+    monkeypatch.setattr(SlackApiClient, "call", fake_call)
+    run_id = begin_run()
+    batch_id = create_batch(
+        run_id,
+        "11.0",
+        [{"ts": "10.0", "thread_ts": "10.0", "event_ids": []}],
+    )
+    args = {
+        "text": "Part 1 of 2\nThe first half.",
+        "run_id": run_id,
+        "inbox_batch_id": batch_id,
+        "reply_to_ts": "10.0",
+        "final_reply": False,
+    }
+
+    first = json.loads(SlackPost().invoke(args, {}))
+    duplicate = json.loads(SlackPost().invoke(args, {}))
+
+    assert first["sent"] is True
+    assert duplicate["duplicate"] is True
+    assert request_was_answered("C123", "10.0") is False
+
+    final = json.loads(
+        SlackPost().invoke(
+            {
+                "text": "Part 2 of 2\nThe second half.",
+                "run_id": run_id,
+                "inbox_batch_id": batch_id,
+                "reply_to_ts": "10.0",
+                "final_reply": True,
+            },
+            {},
+        )
+    )
+    checkpoint = json.loads(
+        ColleagueState().invoke(
+            {
+                "action": "checkpoint",
+                "run_id": run_id,
+                "last_slack_ts": "11.0",
+                "inbox_batch_id": batch_id,
+            },
+            {},
+        )
+    )
+
+    assert final["sent"] is True
+    assert request_was_answered("C123", "10.0") is True
+    assert checkpoint["ok"] is True
+    assert len(calls) == 2
 
 
 def test_slack_inbox_filters_answered_requests_and_completes_socket_events(monkeypatch, tmp_path):

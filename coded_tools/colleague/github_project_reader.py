@@ -63,6 +63,7 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
               number
               title
               url
+              createdAt
               updatedAt
               repository { nameWithOwner }
               assignees(first: 100) { totalCount nodes { login } }
@@ -73,6 +74,7 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
               number
               title
               url
+              createdAt
               updatedAt
               repository { nameWithOwner }
               assignees(first: 100) { totalCount nodes { login } }
@@ -81,6 +83,7 @@ query ReadConfiguredProject($owner: String!, $number: Int!, $cursor: String, $pa
             ... on DraftIssue {
               id
               title
+              createdAt
               updatedAt
               assignees(first: 100) { totalCount nodes { login } }
             }
@@ -341,6 +344,7 @@ class GitHubProjectReader(CodedTool):
             "project_position": project_position,
             "assignees": assignees,
             "labels": labels,
+            "created_at": cls._bounded_string(content.get("createdAt"), 100),
             "updated_at": cls._bounded_string(content.get("updatedAt") or node.get("updatedAt"), 100),
         }
 
