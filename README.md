@@ -28,8 +28,8 @@ provide no merge, close, delete, source-write, or formal-approval operation.
 - A native `manifest.hocon` periodic interaction, defaulting to every 15 minutes.
 - A host-scoped GitHub Project snapshot tool whose owner/project cannot be
   selected by the model; it reads and digests the full board inside Python.
-- A `GitHubAssistant` coordinator over scoped Kanban, ticket, PR, and source
-  specialists backed by bounded readers for allowlisted public repositories.
+- A `GitHubAssistant` coordinator over complete configured-Project data plus
+  ticket, PR, and source readers for every repository accessible to its token.
 - A bounded `AgenticDeliveryManager`: the top colleague supplies Kanban-aware
   product judgment, while approval and ticket-to-PR execution stay downstream.
 - The existing `neuro-san-coder` pinned as a source dependency and invoked
@@ -147,8 +147,8 @@ Fill in `.env`:
 - `OPENAI_API_KEY`
 - `GITHUB_TOKEN`
 - `GITHUB_PROJECT_OWNER` and `GITHUB_PROJECT_NUMBER`
-- `GITHUB_READ_ALLOWED_REPOSITORIES` when public repositories beyond the
-  default `neuro-san` and `neuro-san-studio` pair are needed
+- `GITHUB_READ_ALLOWED_REPOSITORIES` only when you want to narrow the default
+  token-wide read scope
 - `SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_CHANNEL_ID`, and
   `SLACK_ALLOWED_USER_IDS`
 - `SLACK_APP_TOKEN` only if using the inbound Socket Mode bridge
@@ -323,29 +323,32 @@ URL—not a repository number. Use a dedicated token with:
 
 - `read:project` for Projects v2;
 - `read:org` if the organization requires it;
-- read-only repository access for the public issue/PR/source details used here.
+- read-only repository access for the issue/PR/source details used here,
+  including any configured private repositories.
 
 The sample agent does not receive raw GitHub MCP tools. Its coded snapshot tool
 has no resource-selection arguments and reads only `GITHUB_PROJECT_OWNER` plus
 `GITHUB_PROJECT_NUMBER` from the host, so prompt text cannot redirect it to a
 different project or repository. It uses a constant GraphQL query, computes a
-digest over every normalized item inside the host, and returns only aggregate
-counts plus bounded attention items to the LLM; no mutation exists.
+digest over every normalized item inside the host, and returns aggregate counts,
+complete per-assignee rankings, plus bounded attention and ordered-column items
+to the LLM; no mutation exists.
 
-Ticket, PR, and code inspection use a separate explicit public-repository
-allowlist. The defaults are:
+Ticket, PR, and code inspection default to every repository the configured token
+can read:
 
 ```dotenv
-GITHUB_READ_ALLOWED_REPOSITORIES=cognizant-ai-lab/neuro-san,cognizant-ai-lab/neuro-san-studio
+GITHUB_READ_ALLOWED_REPOSITORIES=*
 ```
 
-Add related public repositories as comma-separated `owner/repository` names.
-Every request must match this list, and the tool independently checks that
-GitHub reports `private=false` before returning issue bodies, PR patches, trees,
-or files. Reads are bounded: one issue or PR at a time, at most 100 changed
-files, a 5,000-entry tree, and 100 KB per text file. These agents are available
-for directed questions and concrete PM decisions; normal periodic board checks
-do not automatically scan source repositories.
+The token's GitHub permissions define the readable scope. To narrow that scope,
+replace `*` with comma-separated `owner/repository` names. Private data is
+returned only when the token can read it. Directed Project questions can use the
+complete normalized item array for arbitrary filtering, grouping, counting,
+sorting, and comparison. Reads remain operationally bounded: one issue or PR at
+a time, at most 100 changed files, a 5,000-entry tree, and 100 KB per text file.
+Normal periodic board checks use the compact snapshot and do not automatically
+scan source repositories.
 
 [`mcp/mcp_info.hocon`](mcp/mcp_info.hocon) also records explicit hosted
 `/projects/readonly`, `/issues/readonly`, and `/pull_requests/readonly`

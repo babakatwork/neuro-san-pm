@@ -39,11 +39,9 @@ def test_runtime_config_never_returns_secrets(monkeypatch):
 
     assert result["ok"] is True
     assert result["github"]["project_number"] == 7
-    assert result["github"]["public_repository_allowlist"] == [
-        "cognizant-ai-lab/neuro-san",
-        "cognizant-ai-lab/neuro-san-studio",
-    ]
-    assert result["github"]["public_repository_read_only"] is True
+    assert result["github"]["repository_allowlist"] == ["*"]
+    assert result["github"]["repository_scope"] == "token"
+    assert result["github"]["repository_read_only"] is True
     assert result["slack"]["allowed_user_count"] == 2
     assert result["slack"]["require_mention"] is True
     assert result["slack"]["availability_enabled"] is False
@@ -51,15 +49,15 @@ def test_runtime_config_never_returns_secrets(monkeypatch):
     assert "slack-secret-value" not in raw
 
 
-def test_runtime_config_rejects_invalid_public_repository_allowlist(monkeypatch):
+def test_runtime_config_rejects_invalid_repository_allowlist(monkeypatch):
     set_valid_config(monkeypatch)
     monkeypatch.setenv("GITHUB_READ_ALLOWED_REPOSITORIES", "not-a-full-name")
 
     result = json.loads(RuntimeConfig().invoke({}, {}))
 
     assert result["ok"] is False
-    assert result["github"]["public_repository_allowlist"] == []
-    assert "GITHUB_READ_ALLOWED_REPOSITORIES must contain owner/repository names" in result["missing"]
+    assert result["github"]["repository_allowlist"] == []
+    assert "GITHUB_READ_ALLOWED_REPOSITORIES must be * or contain owner/repository names" in result["missing"]
 
 
 @pytest.mark.parametrize(

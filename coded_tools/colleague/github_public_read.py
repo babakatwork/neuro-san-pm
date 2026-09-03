@@ -1,4 +1,4 @@
-"""Bounded read-only access to explicitly allowlisted public GitHub repositories."""
+"""Bounded token-scoped, read-only access to GitHub repositories."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from coded_tools.colleague._runtime import json_result
 from coded_tools.colleague.untrusted_text import sanitize_untrusted_text
 
 API_ROOT = "https://api.github.com"
-DEFAULT_REPOSITORIES = "cognizant-ai-lab/neuro-san,cognizant-ai-lab/neuro-san-studio"
+DEFAULT_REPOSITORIES = "*"
 NAME_RE = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 REF_RE = re.compile(r"[A-Za-z0-9._/-]{1,200}")
 MAX_BODY_CHARS = 30_000
@@ -25,6 +25,7 @@ MAX_PATCH_CHARS = 60_000
 MAX_FILE_BYTES = 100_000
 MAX_TREE_ENTRIES = 5_000
 MAX_PR_FILES = 100
+MAX_COMMENTS_PER_PAGE = 100
 
 
 class GitHubReadError(RuntimeError):
@@ -37,26 +38,33 @@ class GitHubReadError(RuntimeError):
 
 
 def allowed_repository_names(value: str | None = None) -> list[str]:
-    """Parse the explicit public-repository allowlist without making a request."""
+    """Parse an optional repository allowlist; ``*`` delegates scope to the token."""
     configured = value if value is not None else os.getenv("GITHUB_READ_ALLOWED_REPOSITORIES", DEFAULT_REPOSITORIES)
     repositories = sorted({item.strip() for item in configured.split(",") if item.strip()})
-    if not repositories or any(
-        len(parts := repository.split("/")) != 2 or any(not NAME_RE.fullmatch(part) for part in parts)
+    if not repositories:
+        repositories = ["*"]
+    if ("*" in repositories and repositories != ["*"]) or any(
+        repository != "*"
+        and (
+            len(parts := repository.split("/")) != 2
+            or any(not NAME_RE.fullmatch(part) for part in parts)
+        )
         for repository in repositories
     ):
         raise GitHubReadError(
             "invalid_allowlist",
-            "GITHUB_READ_ALLOWED_REPOSITORIES must contain owner/repository names",
+            "GITHUB_READ_ALLOWED_REPOSITORIES must be * or contain owner/repository names",
         )
     return repositories
 
 
-class _PublicGitHubClient:
+class _ScopedGitHubClient:
     def __init__(self) -> None:
         self.token = os.getenv("GITHUB_TOKEN", "").strip()
         if not self.token:
             raise GitHubReadError("missing_token", "GITHUB_TOKEN is required")
         self.allowed = {value.casefold() for value in allowed_repository_names()}
+        self.token_scoped = self.allowed == {"*"}
         try:
             self.timeout = float(os.getenv("GITHUB_HTTP_TIMEOUT_SECONDS", "15"))
         except ValueError as exc:
@@ -73,11 +81,13 @@ class _PublicGitHubClient:
         owner_text = str(owner or "").strip()
         repo_text = str(repo or "").strip()
         full_name = f"{owner_text}/{repo_text}"
-        if not self._valid_full_name(full_name) or full_name.casefold() not in self.allowed:
-            raise GitHubReadError("repository_not_allowed", "Repository is not in the public read allowlist")
+        if not self._valid_full_name(full_name) or (
+            not self.token_scoped and full_name.casefold() not in self.allowed
+        ):
+            raise GitHubReadError("repository_not_allowed", "Repository is not in the configured read allowlist")
         metadata = self.get(f"/repos/{quote(owner_text, safe='')}/{quote(repo_text, safe='')}")
-        if not isinstance(metadata, dict) or metadata.get("private") is not False:
-            raise GitHubReadError("repository_not_public", "Repository is not public")
+        if not isinstance(metadata, dict):
+            raise GitHubReadError("invalid_response", "GitHub returned invalid repository metadata")
         return owner_text, repo_text, metadata
 
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
@@ -115,6 +125,15 @@ def _positive_number(value: object, label: str) -> int:
     return number
 
 
+def _page_size(value: object, label: str, default: int) -> int:
+    if value is None:
+        return default
+    number = _positive_number(value, label)
+    if number > MAX_COMMENTS_PER_PAGE:
+        raise GitHubReadError("invalid_number", f"{label} must be between 1 and {MAX_COMMENTS_PER_PAGE}")
+    return number
+
+
 def _names(values: object, key: str = "login") -> list[str]:
     if not isinstance(values, list):
         return []
@@ -129,7 +148,7 @@ class _GitHubReadTool(CodedTool):
     def invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> str:
         del sly_data
         try:
-            result = self.read(_PublicGitHubClient(), args)
+            result = self.read(_ScopedGitHubClient(), args)
         except GitHubReadError as exc:
             append_audit(self.event_name, ok=False, error_code=exc.code)
             return json_result(ok=False, error=exc.message)
@@ -139,7 +158,7 @@ class _GitHubReadTool(CodedTool):
     async def async_invoke(self, args: dict[str, Any], sly_data: dict[str, Any]) -> str:
         return await asyncio.to_thread(self.invoke, args, sly_data)
 
-    def read(self, client: _PublicGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
+    def read(self, client: _ScopedGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError
 
     def audit_fields(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -148,11 +167,11 @@ class _GitHubReadTool(CodedTool):
 
 
 class GitHubIssueRead(_GitHubReadTool):
-    """Read one issue body from an allowlisted public repository."""
+    """Read one issue body from a token-accessible repository."""
 
     event_name = "github_issue_read"
 
-    def read(self, client: _PublicGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
+    def read(self, client: _ScopedGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
         owner, repo, _metadata = client.repository(args.get("owner"), args.get("repo"))
         number = _positive_number(args.get("number"), "number")
         issue = client.get(f"/repos/{quote(owner)}/{quote(repo)}/issues/{number}")
@@ -160,6 +179,18 @@ class GitHubIssueRead(_GitHubReadTool):
             raise GitHubReadError("invalid_response", "GitHub returned an invalid issue")
         if issue.get("pull_request"):
             raise GitHubReadError("not_an_issue", "The requested number identifies a pull request")
+        comment_count = int(issue.get("comments") or 0)
+        comment_page = _positive_number(args.get("comment_page", 1), "comment_page")
+        comments_per_page = _page_size(args.get("comments_per_page"), "comments_per_page", 100)
+        comments: list[Any] = []
+        if comment_count:
+            raw_comments = client.get(
+                f"/repos/{quote(owner)}/{quote(repo)}/issues/{number}/comments",
+                params={"page": comment_page, "per_page": comments_per_page},
+            )
+            if not isinstance(raw_comments, list):
+                raise GitHubReadError("invalid_response", "GitHub returned invalid issue comments")
+            comments = raw_comments
         milestone = issue.get("milestone")
         user = issue.get("user")
         return {
@@ -175,7 +206,26 @@ class GitHubIssueRead(_GitHubReadTool):
             "milestone": str(milestone.get("title") or "")[:300] if isinstance(milestone, dict) else "",
             "created_at": str(issue.get("created_at") or "")[:100],
             "updated_at": str(issue.get("updated_at") or "")[:100],
-            "comment_count": int(issue.get("comments") or 0),
+            "comment_count": comment_count,
+            "comment_page": comment_page,
+            "comments_per_page": comments_per_page,
+            "comments": [
+                {
+                    "author": str(comment.get("user", {}).get("login") or "")[:200]
+                    if isinstance(comment.get("user"), dict)
+                    else "",
+                    "body": sanitize_untrusted_text(str(comment.get("body") or ""), MAX_BODY_CHARS),
+                    "url": str(comment.get("html_url") or "")[:1000],
+                    "created_at": str(comment.get("created_at") or "")[:100],
+                    "updated_at": str(comment.get("updated_at") or "")[:100],
+                }
+                for comment in comments
+                if isinstance(comment, dict)
+            ],
+            "comments_complete": comment_page * comments_per_page >= comment_count,
+            "next_comment_page": (
+                comment_page + 1 if comment_page * comments_per_page < comment_count else None
+            ),
         }
 
     def audit_fields(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -187,7 +237,7 @@ class GitHubPullRequestRead(_GitHubReadTool):
 
     event_name = "github_pull_request_read"
 
-    def read(self, client: _PublicGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
+    def read(self, client: _ScopedGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
         owner, repo, _metadata = client.repository(args.get("owner"), args.get("repo"))
         number = _positive_number(args.get("number"), "number")
         pull = client.get(f"/repos/{quote(owner)}/{quote(repo)}/pulls/{number}")
@@ -245,11 +295,11 @@ class GitHubPullRequestRead(_GitHubReadTool):
 
 
 class GitHubRepositoryTree(_GitHubReadTool):
-    """List bounded paths at a ref in an allowlisted public repository."""
+    """List bounded paths at a ref in a token-accessible repository."""
 
     event_name = "github_repository_tree"
 
-    def read(self, client: _PublicGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
+    def read(self, client: _ScopedGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
         owner, repo, metadata = client.repository(args.get("owner"), args.get("repo"))
         ref = str(args.get("ref") or metadata.get("default_branch") or "").strip()
         if not REF_RE.fullmatch(ref) or ".." in ref:
@@ -293,11 +343,11 @@ class GitHubRepositoryTree(_GitHubReadTool):
 
 
 class GitHubFileRead(_GitHubReadTool):
-    """Read one bounded UTF-8-compatible text file from a public repository."""
+    """Read one bounded UTF-8-compatible text file from a token-accessible repository."""
 
     event_name = "github_file_read"
 
-    def read(self, client: _PublicGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
+    def read(self, client: _ScopedGitHubClient, args: dict[str, Any]) -> dict[str, Any]:
         owner, repo, metadata = client.repository(args.get("owner"), args.get("repo"))
         path = str(args.get("path") or "").strip("/")
         if not path or ".." in path.split("/") or len(path) > 1000:

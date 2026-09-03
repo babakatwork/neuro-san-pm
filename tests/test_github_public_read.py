@@ -33,9 +33,19 @@ def test_issue_reader_returns_body_and_metadata(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
 
     def fake_get(url, **kwargs):
-        del kwargs
         if url.endswith("/repos/cognizant-ai-lab/neuro-san"):
             return Response(public_repository())
+        if url.endswith("/issues/900/comments"):
+            assert kwargs["params"] == {"page": 1, "per_page": 100}
+            return Response(
+                [
+                    {
+                        "user": {"login": "reviewer"},
+                        "body": "The scheduled wake-up now passes.",
+                        "html_url": "https://github.com/cognizant-ai-lab/neuro-san/issues/900#issuecomment-1",
+                    }
+                ]
+            )
         return Response(
             {
                 "title": "Loop support",
@@ -58,6 +68,41 @@ def test_issue_reader_returns_body_and_metadata(monkeypatch, tmp_path):
     assert result["body"].startswith("Acceptance:")
     assert result["assignees"] == ["owner"]
     assert result["labels"] == ["feature"]
+    assert result["comments"][0]["author"] == "reviewer"
+    assert result["comments"][0]["body"] == "The scheduled wake-up now passes."
+    assert result["comments_complete"] is True
+    assert result["next_comment_page"] is None
+
+
+def test_issue_reader_exposes_comment_pagination(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/repos/cognizant-ai-lab/neuro-san"):
+            return Response(public_repository())
+        if url.endswith("/issues/900/comments"):
+            assert kwargs["params"] == {"page": 2, "per_page": 25}
+            return Response([{"user": {"login": "reviewer"}, "body": "page two"}])
+        return Response({"title": "Discussion", "comments": 80})
+
+    monkeypatch.setattr("coded_tools.colleague.github_public_read.requests.get", fake_get)
+    result = json.loads(
+        GitHubIssueRead().invoke(
+            {
+                "owner": "cognizant-ai-lab",
+                "repo": "neuro-san",
+                "number": 900,
+                "comment_page": 2,
+                "comments_per_page": 25,
+            },
+            {},
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["comments"][0]["body"] == "page two"
+    assert result["comments_complete"] is False
+    assert result["next_comment_page"] == 3
 
 
 def test_reader_rejects_unallowlisted_repo_without_network(monkeypatch, tmp_path):
@@ -69,19 +114,58 @@ def test_reader_rejects_unallowlisted_repo_without_network(monkeypatch, tmp_path
     monkeypatch.setattr("coded_tools.colleague.github_public_read.requests.get", unexpected_get)
     result = json.loads(GitHubIssueRead().invoke({"owner": "someone", "repo": "private-looking", "number": 1}, {}))
 
-    assert result == {"error": "Repository is not in the public read allowlist", "ok": False}
+    assert result == {"error": "Repository is not in the configured read allowlist", "ok": False}
 
 
-def test_reader_rejects_private_repository(monkeypatch, tmp_path):
+def test_reader_allows_explicitly_allowlisted_private_repository(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
-    monkeypatch.setattr(
-        "coded_tools.colleague.github_public_read.requests.get",
-        lambda *args, **kwargs: Response({"private": True}),
-    )
+
+    def fake_get(url, **kwargs):
+        del kwargs
+        if url.endswith("/repos/cognizant-ai-lab/neuro-san"):
+            return Response({"private": True, "default_branch": "main"})
+        return Response(
+            {
+                "title": "Private issue",
+                "body": "Visible through the explicitly allowlisted token.",
+                "state": "open",
+                "html_url": "https://github.com/cognizant-ai-lab/neuro-san/issues/1",
+                "assignees": [{"login": "owner"}],
+            }
+        )
+
+    monkeypatch.setattr("coded_tools.colleague.github_public_read.requests.get", fake_get)
 
     result = json.loads(GitHubIssueRead().invoke({"owner": "cognizant-ai-lab", "repo": "neuro-san", "number": 1}, {}))
 
-    assert result == {"error": "Repository is not public", "ok": False}
+    assert result["ok"] is True
+    assert result["title"] == "Private issue"
+    assert result["assignees"] == ["owner"]
+
+
+def test_token_scoped_reader_allows_any_accessible_repository(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("GITHUB_READ_ALLOWED_REPOSITORIES", "*")
+
+    def fake_get(url, **kwargs):
+        del kwargs
+        if url.endswith("/repos/another-org/private-repo"):
+            return Response({"private": True, "default_branch": "main"})
+        return Response(
+            {
+                "title": "Token-visible issue",
+                "body": "Available without a second host allowlist.",
+                "state": "open",
+                "html_url": "https://github.com/another-org/private-repo/issues/7",
+            }
+        )
+
+    monkeypatch.setattr("coded_tools.colleague.github_public_read.requests.get", fake_get)
+
+    result = json.loads(GitHubIssueRead().invoke({"owner": "another-org", "repo": "private-repo", "number": 7}, {}))
+
+    assert result["ok"] is True
+    assert result["title"] == "Token-visible issue"
 
 
 def test_pull_request_reader_returns_bounded_patch_context(monkeypatch, tmp_path):

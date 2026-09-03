@@ -29,7 +29,7 @@ class KanbanSnapshot(CodedTool):
         if not isinstance(raw_items, list):
             return json_result(ok=False, error="items must be an array")
         try:
-            max_items = max(1, int(os.getenv("COLLEAGUE_MAX_PROJECT_ITEMS", "500")))
+            max_items = max(1, int(os.getenv("COLLEAGUE_MAX_PROJECT_ITEMS", "10000")))
         except ValueError:
             return json_result(ok=False, error="COLLEAGUE_MAX_PROJECT_ITEMS must be an integer")
         if len(raw_items) > max_items:
@@ -57,6 +57,7 @@ class KanbanSnapshot(CodedTool):
             for item in items
             if "block" in item["status"].lower() or any("block" in label.lower() for label in item["labels"])
         ]
+        active_items = [item for item in items if item["status"].strip().lower() not in DONE_STATUSES]
         ordered_columns = self._ordered_columns(items)
         snapshot = {
             "project_title": canonical["project_title"],
@@ -66,6 +67,9 @@ class KanbanSnapshot(CodedTool):
             "status_counts": status_counts,
             "priority_counts": priority_counts,
             "missing_assignee_count": sum(not item["assignees"] for item in items),
+            "assignee_counts": self._assignee_counts(items),
+            "active_assignee_counts": self._assignee_counts(active_items),
+            "active_missing_assignee_count": sum(not item["assignees"] for item in active_items),
             "ordered_columns": ordered_columns,
             "attention": {
                 "blocked": blocked[:MAX_ATTENTION_ITEMS],
@@ -92,6 +96,7 @@ class KanbanSnapshot(CodedTool):
         return {
             "id": identity,
             "type": str(item.get("type", "Issue"))[:100],
+            "repository": str(item.get("repository", ""))[:300],
             "number": str(item.get("number", ""))[:100],
             "title": title,
             "url": url,
@@ -128,9 +133,11 @@ class KanbanSnapshot(CodedTool):
                         "rank": rank,
                         "project_position": item["project_position"],
                         "type": item["type"],
+                        "repository": item["repository"],
                         "number": item["number"],
                         "title": item["title"],
                         "url": item["url"],
+                        "assignees": item["assignees"],
                     }
                 )
             columns[status] = {
@@ -139,6 +146,18 @@ class KanbanSnapshot(CodedTool):
                 "truncated": len(column_items) > MAX_ORDERED_ITEMS_PER_COLUMN,
             }
         return columns
+
+    @staticmethod
+    def _assignee_counts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return the complete per-login distribution in deterministic rank order."""
+        counts = Counter(assignee for item in items for assignee in item["assignees"])
+        return [
+            {"login": login, "ticket_count": count}
+            for login, count in sorted(
+                counts.items(),
+                key=lambda value: (-value[1], value[0].casefold(), value[0]),
+            )
+        ]
 
     @staticmethod
     def _is_stale(item: dict[str, Any], stale_after_days: int) -> bool:

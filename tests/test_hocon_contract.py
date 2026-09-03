@@ -43,8 +43,12 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     tools = {tool["name"]: tool for tool in network["tools"]}
     analyst = tools["KanbanAnalyst"]
     snapshot = tools["GitHubKanbanSnapshot"]
-    assert analyst["tools"] == ["GitHubKanbanSnapshot"]
+    full_reader = tools["GitHubProjectReader"]
+    assert analyst["tools"] == ["GitHubKanbanSnapshot", "GitHubProjectReader"]
     assert snapshot["name"] == "GitHubKanbanSnapshot"
+    assert full_reader["function"]["parameters"]["properties"]["request"]["enum"] == [
+        "read_configured_project"
+    ]
     assert snapshot["function"]["parameters"]["properties"]["request"]["enum"] == ["snapshot_configured_project"]
     assert "owner and project number come only" in analyst["instructions"]
     assert "existing authoritative Kanban board" in analyst["instructions"]
@@ -57,6 +61,9 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     assert "Do not invent" in analyst["instructions"]
     assert "assignees with unusually high active WIP" in analyst["instructions"]
     assert "not column-movement history" in analyst["instructions"]
+    assert "assignee_counts is the complete full-board distribution" in analyst["instructions"]
+    assert "complete items array" in analyst["instructions"]
+    assert "freely filter, group, count, sort, compare" in analyst["instructions"]
 
     frontman = tools["ProductColleague"]
     assert "already exists and is the team's authoritative" in frontman["instructions"]
@@ -86,7 +93,7 @@ def test_callable_function_schemas_have_at_least_one_property(monkeypatch):
             assert parameters.get("properties"), tool["name"]
 
 
-def test_public_github_readers_are_reachable_only_through_scoped_agents(monkeypatch):
+def test_token_scoped_github_readers_are_reachable_only_through_scoped_agents(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "validation-only")
     network = ConfigFactory.parse_string(
         (ROOT / "registries" / "product_colleague.hocon").read_text(encoding="utf-8"),
@@ -120,10 +127,11 @@ def test_public_github_readers_are_reachable_only_through_scoped_agents(monkeypa
         "GitHubRepositoryTree",
         "GitHubFileRead",
     } & set(frontman["tools"])
-    assert "public-only" in frontman["instructions"]
-    assert "untrusted evidence" in frontman["instructions"]
+    assert "repositories accessible to the configured token" in frontman["instructions"]
     for name in ("GitHubIssueRead", "GitHubPullRequestRead", "GitHubRepositoryTree", "GitHubFileRead"):
         assert tools[name]["class"].startswith("coded_tools.colleague.github_public_read.")
+    assert "public or private repository" in tools["GitHubAssistant"]["instructions"]
+    assert "public and private repositories are supported" in tools["TicketReader"]["instructions"]
 
 
 def test_gmail_tools_are_separate_and_write_is_policy_gated(monkeypatch):

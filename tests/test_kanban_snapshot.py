@@ -19,7 +19,7 @@ def test_snapshot_is_deterministic_and_surfaces_attention(monkeypatch):
             "status": "Done",
             "updated_at": "2000-01-01T00:00:00Z",
         },
-        {"id": "3", "title": "Needs triage"},
+        {"id": "3", "title": "Needs triage", "assignees": ["zoe", "amy"]},
     ]
     tool = KanbanSnapshot()
 
@@ -29,7 +29,13 @@ def test_snapshot_is_deterministic_and_surfaces_attention(monkeypatch):
     assert first["digest"] == second["digest"]
     assert first["status_counts"] == {"Blocked": 1, "Done": 1, "No status": 1}
     assert first["priority_counts"] == {"No priority": 3}
-    assert first["missing_assignee_count"] == 3
+    assert first["missing_assignee_count"] == 2
+    assert first["assignee_counts"] == [
+        {"login": "amy", "ticket_count": 1},
+        {"login": "zoe", "ticket_count": 1},
+    ]
+    assert first["active_assignee_counts"] == first["assignee_counts"]
+    assert first["active_missing_assignee_count"] == 1
     assert "items" not in first
     assert [item["title"] for item in first["ordered_columns"]["Blocked"]["items"]] == ["Blocked work"]
     assert first["attention"]["missing_status_count"] == 1
@@ -72,3 +78,28 @@ def test_snapshot_preserves_column_order_and_reordering_changes_digest(monkeypat
     assert [item["rank"] for item in first["ordered_columns"]["To Do"]["items"]] == [1, 2]
     assert [item["number"] for item in second["ordered_columns"]["To Do"]["items"]] == ["102", "101"]
     assert first["digest"] != second["digest"]
+
+
+def test_snapshot_ranks_complete_assignee_distribution(monkeypatch):
+    monkeypatch.setenv("COLLEAGUE_STALE_AFTER_DAYS", "14")
+    items = [
+        {"id": "1", "status": "In Progress", "assignees": ["zoe", "amy"]},
+        {"id": "2", "status": "Done", "assignees": ["zoe"]},
+        {"id": "3", "status": "Backlog", "assignees": ["Bob"]},
+        {"id": "4", "status": "Backlog", "assignees": ["bob"]},
+    ]
+
+    snapshot = json.loads(KanbanSnapshot().invoke({"items": items}, {}))["snapshot"]
+
+    assert snapshot["assignee_counts"] == [
+        {"login": "zoe", "ticket_count": 2},
+        {"login": "amy", "ticket_count": 1},
+        {"login": "Bob", "ticket_count": 1},
+        {"login": "bob", "ticket_count": 1},
+    ]
+    assert snapshot["active_assignee_counts"] == [
+        {"login": "amy", "ticket_count": 1},
+        {"login": "Bob", "ticket_count": 1},
+        {"login": "bob", "ticket_count": 1},
+        {"login": "zoe", "ticket_count": 1},
+    ]

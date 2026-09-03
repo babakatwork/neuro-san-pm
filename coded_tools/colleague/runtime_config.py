@@ -30,10 +30,10 @@ class RuntimeConfig(CodedTool):
             user.strip() for user in os.getenv("SLACK_ALLOWED_USER_IDS", "").split(",") if user.strip()
         )
         try:
-            public_repositories = allowed_repository_names()
+            repositories = allowed_repository_names()
             repository_allowlist_error = None
         except GitHubReadError as exc:
-            public_repositories = []
+            repositories = []
             repository_allowlist_error = exc.message
 
         missing: list[str] = []
@@ -83,7 +83,7 @@ class RuntimeConfig(CodedTool):
         max_run_seconds, max_run_error = self._safe_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
         report_interval_hours, report_error = self._safe_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
         stale_after_days, stale_error = self._safe_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
-        max_project_items, max_items_error = self._safe_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 500, 1000)
+        max_project_items, max_items_error = self._safe_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 10_000, 10_000)
         slack_max_pages, slack_pages_error = self._safe_bounded_int("COLLEAGUE_SLACK_MAX_PAGES", 10, 100)
         slack_max_requests, slack_requests_error = self._safe_bounded_int("COLLEAGUE_SLACK_MAX_REQUESTS", 50, 500)
         slack_max_thread_pages, slack_thread_pages_error = self._safe_bounded_int(
@@ -179,8 +179,9 @@ class RuntimeConfig(CodedTool):
                 "owner_type": owner_type,
                 "project_number": project_number,
                 "mcp_read_only": True,
-                "public_repository_read_only": True,
-                "public_repository_allowlist": public_repositories,
+                "repository_read_only": True,
+                "repository_allowlist": repositories,
+                "repository_scope": "token" if repositories == ["*"] else "allowlist",
             },
             slack={
                 "channel_id": channel_id,

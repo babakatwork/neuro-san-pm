@@ -25,20 +25,21 @@ Read-only is not resource scoping: a raw MCP tool can still read any project or
 repository authorized by its token. The sample therefore does not attach those
 MCP tools. `GitHubKanbanSnapshot` takes no owner/project selection arguments and
 uses one constant query against host-owned coordinates. It keeps the raw board
-inside coded Python, computes the digest there, and exposes only aggregates and
-bounded attention items to the analyst. The MCP entries remain templates for
-future networks that add an equivalent validating boundary.
+inside coded Python, computes the digest there, and exposes aggregates including
+complete per-assignee rankings plus bounded attention items to the analyst. For
+directed analytical questions the same analyst can call the fixed Project reader
+and receive the complete normalized item array. The MCP entries remain templates
+for future networks that add an equivalent validating boundary.
 
 For ticket bodies, PRs, and focused source inspection, the network now uses a
 small GET-only GitHub REST client instead of handing raw MCP tools to the front
 agent. `GitHubAssistant` is an intermediate coordinator over the existing
 Kanban analyst and three repository specialists. Those specialists receive only
 the operations they need: one issue reader, a PR reader with bounded patches,
-and repository tree/file readers. The
-host requires an explicit `owner/repository` allowlist, verifies the repository
-is public, rejects traversal and invalid refs, and caps bodies, patches, trees,
-and text files. This allows related public repositories to be added deliberately
-without granting model-selected access to every repository visible to the token.
+and repository tree/file readers. The read scope defaults to every public or
+private repository accessible to the token. An operator can optionally replace
+`*` with an `owner/repository` allowlist. The host still rejects traversal and
+invalid refs and caps bodies, patches, trees, and text files.
 
 ## Existing `slack.py`
 

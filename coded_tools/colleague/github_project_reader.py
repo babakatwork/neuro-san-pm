@@ -16,7 +16,7 @@ from coded_tools.colleague._runtime import json_result
 
 GRAPHQL_URL = "https://api.github.com/graphql"
 PAGE_SIZE = 50
-MAX_PROJECT_ITEMS = 1000
+MAX_PROJECT_ITEMS = 10_000
 MAX_ITEM_VALUES = 100
 MAX_CURSOR_LENGTH = 2048
 CONNECT_TIMEOUT_SECONDS = 5.0
@@ -150,7 +150,7 @@ class GitHubProjectReader(CodedTool):
         if project_number <= 0:
             raise _ReaderError("invalid_project_number", "GITHUB_PROJECT_NUMBER must be a positive integer")
         max_items = GitHubProjectReader._bounded_int(
-            "COLLEAGUE_MAX_PROJECT_ITEMS", default=500, maximum=MAX_PROJECT_ITEMS
+            "COLLEAGUE_MAX_PROJECT_ITEMS", default=MAX_PROJECT_ITEMS, maximum=MAX_PROJECT_ITEMS
         )
         read_timeout = GitHubProjectReader._bounded_float(
             "GITHUB_HTTP_TIMEOUT_SECONDS",
