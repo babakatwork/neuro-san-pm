@@ -80,7 +80,7 @@ class RuntimeConfig(CodedTool):
             os.getenv("GMAIL_ALLOWED_RECIPIENTS", ""),
         )
 
-        max_run_seconds, max_run_error = self._safe_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
+        max_run_seconds, max_run_error = self._safe_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 1800)
         report_interval_hours, report_error = self._safe_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
         stale_after_days, stale_error = self._safe_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
         max_project_items, max_items_error = self._safe_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 10_000, 10_000)
@@ -130,8 +130,8 @@ class RuntimeConfig(CodedTool):
             )
             if error
         )
-        if max_run_seconds != 600:
-            missing.append("COLLEAGUE_MAX_RUN_SECONDS must be 600 to match the agent timeout")
+        if max_run_seconds != 1800:
+            missing.append("COLLEAGUE_MAX_RUN_SECONDS must be 1800 to match the agent timeout")
         if os.getenv("AGENT_REQUEST_LOGGING_INPUT_SLICE") != "0":
             missing.append("AGENT_REQUEST_LOGGING_INPUT_SLICE must be 0")
         all_problems = sorted(set(missing + slack_missing))

@@ -163,7 +163,7 @@ def _load(path: Path) -> dict[str, dict[str, Any]]:
 
 def _recent_batches(batches: dict[str, Any]) -> dict[str, dict[str, Any]]:
     try:
-        ttl = max(900, int(os.getenv("COLLEAGUE_MAX_RUN_SECONDS", "600")) + 300)
+        ttl = max(900, int(os.getenv("COLLEAGUE_MAX_RUN_SECONDS", "1800")) + 300)
     except ValueError:
         ttl = 900
     now = time.time()

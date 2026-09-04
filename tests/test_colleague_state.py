@@ -1,4 +1,5 @@
 import json
+import time
 
 from coded_tools.colleague.colleague_state import ColleagueState
 from coded_tools.colleague.slack_inbox_batch import create_batch
@@ -8,14 +9,17 @@ def test_state_lease_checkpoint_and_finish(monkeypatch, tmp_path):
     state_path = tmp_path / "colleague.json"
     monkeypatch.setenv("COLLEAGUE_STATE_PATH", str(state_path))
     monkeypatch.setenv("COLLEAGUE_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "1800")
     tool = ColleagueState()
 
+    started = time.time()
     first = json.loads(tool.invoke({"action": "begin"}, {}))
     assert first["acquired"] is True
     assert first["report_due"] is True
     assert first["first_contact"] is True
     assert first["slack_update_recommended"] is True
     assert first["weekly_email_pending"] is False
+    assert 1859 <= first["state"]["run"]["lease_until"] - started <= 1861
     run_id = first["run_id"]
 
     overlapping = json.loads(tool.invoke({"action": "begin"}, {}))

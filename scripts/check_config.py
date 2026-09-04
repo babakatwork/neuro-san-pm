@@ -124,11 +124,11 @@ def main() -> int:
     _, agentic_stale_error = read_bounded_int("AGENTIC_DELIVERY_STALE_AFTER_DAYS", 14, 3650)
     errors.extend(error for error in (coder_timeout_error, approval_ttl_error, agentic_stale_error) if error)
 
-    cron = os.getenv("COLLEAGUE_CRON_SCHEDULE", "*/15 * * * *")
-    max_run, max_run_error = read_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 600)
+    cron = os.getenv("COLLEAGUE_CRON_SCHEDULE", "0 * * * *")
+    max_run, max_run_error = read_positive_int("COLLEAGUE_MAX_RUN_SECONDS", 1800)
     _, report_error = read_positive_int("COLLEAGUE_REPORT_INTERVAL_HOURS", 36)
     _, stale_error = read_positive_int("COLLEAGUE_STALE_AFTER_DAYS", 14)
-    _, max_items_error = read_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 500, 1000)
+    _, max_items_error = read_bounded_int("COLLEAGUE_MAX_PROJECT_ITEMS", 10_000, 10_000)
     _, slack_pages_error = read_bounded_int("COLLEAGUE_SLACK_MAX_PAGES", 10, 100)
     _, slack_requests_error = read_bounded_int("COLLEAGUE_SLACK_MAX_REQUESTS", 50, 500)
     _, slack_thread_pages_error = read_bounded_int("COLLEAGUE_SLACK_MAX_THREAD_PAGES", 10, 100)
@@ -149,8 +149,8 @@ def main() -> int:
         )
         if error
     )
-    if max_run != 600:
-        errors.append("COLLEAGUE_MAX_RUN_SECONDS must be 600 to match the agent timeout")
+    if max_run != 1800:
+        errors.append("COLLEAGUE_MAX_RUN_SECONDS must be 1800 to match the agent timeout")
     if agentic_enabled:
         if not github_write_enabled:
             errors.append("GITHUB_DELIVERY_WRITE_ENABLED must be true when agentic development is enabled")

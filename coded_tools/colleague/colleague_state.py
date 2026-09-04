@@ -82,7 +82,7 @@ class ColleagueState(CodedTool):
 
     def _begin(self) -> str:
         now = time.time()
-        lease_seconds = max(60, int(os.getenv("COLLEAGUE_MAX_RUN_SECONDS", "600")) + 60)
+        lease_seconds = max(60, int(os.getenv("COLLEAGUE_MAX_RUN_SECONDS", "1800")) + 60)
         with exclusive_file_lock(self._path()):
             state = self._load()
             active_run = state.get("run")

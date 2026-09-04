@@ -30,11 +30,11 @@ calling `make down`.
 
 ## Scheduling rules
 
-The default cron expression is `*/15 * * * *`, evaluated in the server's local
-timezone. Override it with `COLLEAGUE_CRON_SCHEDULE` and restart.
+The default cron expression is `0 * * * *` (hourly), evaluated in the server's
+local timezone. Override it with `COLLEAGUE_CRON_SCHEDULE` and restart.
 
 Keep the smallest interval greater than `COLLEAGUE_MAX_RUN_SECONDS`. This sample
-fixes that setting at 600 seconds to match `max_execution_seconds`; the config
+fixes that setting at 1,800 seconds to match `max_execution_seconds`; the config
 checker rejects a mismatch and enforces the interval for consecutive cron
 firings. Neuro SAN does not catch up missed firings after downtime, and schedule
 changes are not currently hot reloaded.

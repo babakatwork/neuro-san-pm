@@ -67,8 +67,8 @@ from `.env.example` and configure:
 - `CODING_AGENT_PRIMARY_WORKSPACE`: an existing directory within those roots.
 - `AGENTIC_DELIVERY_REQUIRED_LABEL`: use `pm-agentic-e2e` for the canary.
 
-The PM run limit is 600 seconds. Keep `CODING_AGENT_TIMEOUT_SECONDS` at 480 or
-lower so the existing coded tool can return and persist its GitHub handoff
+The PM run limit is 1,800 seconds. Keep `CODING_AGENT_TIMEOUT_SECONDS` at 480 or
+lower so the existing coded tool can return and persist its GitHub handoff well
 before the outer run expires.
 
 Before enabling delivery, sign in as the coder machine user and fork every

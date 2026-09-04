@@ -19,7 +19,7 @@ def set_valid_config(monkeypatch):
     monkeypatch.setenv("COLLEAGUE_SLACK_WRITE_ENABLED", "false")
     monkeypatch.setenv("COLLEAGUE_SLACK_AVAILABILITY_ENABLED", "false")
     monkeypatch.setenv("COLLEAGUE_SLACK_REQUIRE_MENTION", "true")
-    monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "600")
+    monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "1800")
     monkeypatch.setenv("COLLEAGUE_REPORT_INTERVAL_HOURS", "24")
     monkeypatch.setenv("COLLEAGUE_STALE_AFTER_DAYS", "14")
     monkeypatch.setenv("COLLEAGUE_MAX_PROJECT_ITEMS", "500")
@@ -178,12 +178,12 @@ def test_strict_env_bool_fails_closed_on_invalid_value(monkeypatch, invalid_valu
 
 def test_runtime_config_requires_timeout_to_match_registry(monkeypatch):
     set_valid_config(monkeypatch)
-    monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "601")
+    monkeypatch.setenv("COLLEAGUE_MAX_RUN_SECONDS", "1801")
 
     result = json.loads(RuntimeConfig().invoke({}, {}))
 
     assert result["ok"] is False
-    assert "COLLEAGUE_MAX_RUN_SECONDS must be 600 to match the agent timeout" in result["missing"]
+    assert "COLLEAGUE_MAX_RUN_SECONDS must be 1800 to match the agent timeout" in result["missing"]
 
 
 def test_runtime_config_requires_request_text_redaction(monkeypatch):

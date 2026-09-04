@@ -297,8 +297,8 @@ or an appropriately published/trusted configuration. See Google's
 
 ## Periodic schedule
 
-The default heartbeat runs every 15 minutes. To run it once per hour, set this
-in `.env`:
+The default heartbeat runs once per hour. To make that setting explicit, use
+this in `.env`:
 
 ```dotenv
 COLLEAGUE_CRON_SCHEDULE="0 * * * *"
@@ -598,7 +598,7 @@ CODING_AGENT_TIMEOUT_SECONDS=480
 `CODING_AGENT_PRIMARY_WORKSPACE` must be an existing Git clone inside an
 allowed root and must correspond to the configured upstream or coder fork. On
 macOS, separate multiple allowed roots with `:`. Keep the coder timeout at 480
-seconds or lower so the 600-second outer PM run retains time to persist the
+seconds or lower so the 1,800-second outer PM run retains time to persist the
 handoff.
 
 The bundled launcher removes ambient human and PM credentials, disables SSH
@@ -768,7 +768,7 @@ network.
 - Missed firings during downtime are skipped; there is no catch-up queue.
 - Schedule edits currently require a restart.
 - The schedule interval must exceed `COLLEAGUE_MAX_RUN_SECONDS`; this sample
-  keeps that value fixed at 600 to match the registry execution timeout.
+  keeps that value fixed at 1,800 to match the registry execution timeout.
 - GitHub and Slack text is treated as untrusted data. Ticket content can never
   authorize actions.
 - General GitHub research remains read-only. Optional delivery mutations use

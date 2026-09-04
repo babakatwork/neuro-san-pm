@@ -14,9 +14,10 @@ def test_event_network_and_native_periodic_manifest(monkeypatch):
     frontman = network["tools"][0]
     manifest_entries = {str(key).strip('"'): value for key, value in manifest.items()}
     interaction = manifest_entries["product_colleague.hocon"]["periodic"]["interactions"][0]
+    assert network["max_execution_seconds"] == 1800
     assert frontman["function"]["invocation"] == "event"
     assert interaction["enable"] is True
-    assert "cron_schedule" in interaction
+    assert interaction["cron_schedule"] == "0 * * * *"
     assert "sly_data" not in interaction
 
 
@@ -66,12 +67,19 @@ def test_sample_uses_host_scoped_github_snapshot(monkeypatch):
     assert "freely filter, group, count, sort, compare" in analyst["instructions"]
 
     frontman = tools["ProductColleague"]
+    github_assistant = tools["GitHubAssistant"]
+    assert github_assistant["max_execution_seconds"] == 1500
+    assert github_assistant["max_steps"] == 160
+    assert "fan out\nindependent ticket/PR/source investigations in parallel" in github_assistant["instructions"]
+    assert "Do not fetch the same issue, PR" in github_assistant["instructions"]
     assert "already exists and is the team's authoritative" in frontman["instructions"]
     assert "never propose or attempt to" in frontman["instructions"]
     normalized_frontman = " ".join(frontman["instructions"].split())
     assert "own the product judgment for agentic-delivery discovery" in normalized_frontman
     assert "AgenticDeliveryManager is the sole down-chain owner" in normalized_frontman
     assert "If nothing warrants delivery attention, do not invoke the manager" in normalized_frontman
+    assert "Directed requests take priority over proactive work" in normalized_frontman
+    assert "preserving at least five minutes" in normalized_frontman
     assert "vertical card order" in frontman["instructions"]
 
     advisor = tools["ProductManagerAdvisor"]
